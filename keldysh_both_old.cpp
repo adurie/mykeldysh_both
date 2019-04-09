@@ -14,7 +14,7 @@ using namespace std;
 typedef complex<double> dcomp;
 
 double fermi(double arg, double Ef){
-	const double k = 8.617e-5/13.6058;
+	const double k = 8.617342857e-5/13.6058;
 	const double T = 300;
 	double kT = k*T;
 	return 1./(1.+exp((arg-Ef)/kT));
@@ -25,8 +25,8 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	dcomp i;
 	double F = cos(x*a)+cos(z*a);
 
-	/* const double V = 0.2; */
-	const double V = 0.3;
+	const double V = 0.0;
+	/* const double V = 0.3; */
 	const double t = 0.5;
 	const double nab = -0.175;
 	Matrix2cd T, NM1, NM2, FM1, FM2, ins, I, S;
@@ -61,6 +61,14 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	ComplexEigenSolver<Matrix4cd> ces2;
 	ces2.compute(X2);
 	O2 = ces2.eigenvectors();
+	Vector4cd eigs2;
+	eigs2 = ces2.eigenvalues();
+	if (!(abs(eigs2(0)) < abs(eigs2(1))))
+		cout<<eigs2.transpose()<<endl;
+	if (!(abs(eigs2(1)) < abs(eigs2(2))))
+		cout<<eigs2.transpose()<<endl;
+	if (!(abs(eigs2(2)) < abs(eigs2(3))))
+		cout<<eigs2.transpose()<<endl;
 	Matrix2cd b2 = O2.topRightCorner(2,2);
 	Matrix2cd d2 = O2.bottomRightCorner(2,2);
 	Matrix2cd GR = b2*d2.inverse();
@@ -69,9 +77,8 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 
 	Matrix2cd OM = (E+im)*I - 2.*T*F;
 
-	Matrix2cd OMV1=(E+im)*I-NM1-2.*T*F;
-
-	double om=E-2.*t*F;
+	Matrix2cd OMV1=(E+im)*I-FM1-2.*T*F;
+	/* Matrix2cd OMV1=(E+im)*I-NM1-2.*T*F; */
 
 	Matrix4cd X,O,Oinv;
 	X << 	0,	0,	1/t,	0,
@@ -81,6 +88,14 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	ComplexEigenSolver<Matrix4cd> ces;
 	ces.compute(X);
 	O = ces.eigenvectors();
+	Vector4cd eigs;
+	eigs = ces.eigenvalues();
+	/* if (!(abs(eigs(0)) < abs(eigs(1)))) */
+	/* 	cout<<eigs.transpose()<<endl; */
+	/* if (!(abs(eigs(1)) < abs(eigs(2)))) */
+	/* 	cout<<eigs.transpose()<<endl; */
+	/* if (!(abs(eigs(2)) < abs(eigs(3)))) */
+	/* 	cout<<eigs.transpose()<<endl; */
 	Matrix2cd b = O.topRightCorner(2,2);
 	Matrix2cd d = O.bottomRightCorner(2,2);
 	Matrix2cd GL = b*d.inverse();
@@ -92,34 +107,34 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 
 	Pauli = yPau;
 	double spincurrent1, spincurrent2;
-	Matrix2cd A,B,TOT1, TOT2,GM;
+	Matrix2cd A,B,TOT1, TOT2;
 //lim is thickness of layer 2
 	const int lim = 1;
 //build thickness of layer 2 to lim layers
-	for (int it=0; it < lim; ++it){
-		if (lim > 1)
-			ins = ins - I*(V*it/(lim*1.-1));
-		GL = (OM - ins -T*GL*T).inverse();
-	}
-//lim2 is thickness of layer 3
-	const int lim2 = 10;
-//build thickness of layer 3 to lim2 layers
-	for (int it=0; it < lim2; ++it){
+	/* for (int it=0; it < lim; ++it){ */
+	/* 	if (lim > 1) */
+	/* 		ins = ins - I*(V*it/(lim*1.-1)); */
+	/* 	GL = (OM - ins -T*GL*T).inverse(); */
+	/* } */
+/* //lim2 is thickness of layer 3 */
+	/* const int lim2 = 10; */
+/* //build thickness of layer 3 to lim2 layers */
+	/* for (int it=0; it < lim2; ++it){ */
 
-		GL = (OM - FM1 -T*GL*T).inverse();
-	}
+	/* 	GL = (OM - FM1 -T*GL*T).inverse(); */
+	/* } */
 //adlayer layer 2 from layer 1 to spacer thickness, N
 	vector<double> result1, result2, result_tot;
 	result1.reserve(N);
 	result2.reserve(N);
 	result_tot.reserve(N);
-	for (int it=0; it < N-1; ++it){
+	for (int it=0; it < N; ++it){
 		A = (I-GR*T_dagg*GL*T).inverse();
 		B = (I-GR_dagg*T_dagg*GL.adjoint()*T).inverse();
 		TOT1 = (GL*T*A*B*GR_dagg*T_dagg-A*B+0.5*(A+B))*Pauli;
 		TOT2 = (B - A)*Pauli;
-		spincurrent1 = (1./(2.*M_PI))*real(TOT1.trace())*(fermi(E,Ef+V)-fermi(E,Ef));
-		spincurrent2 = (1./(4.*M_PI))*real(TOT2.trace())*(fermi(E,Ef+V)+fermi(E,Ef));
+		spincurrent1 = (1./(2.*M_PI))*real(TOT1.trace())*(fermi(E,Ef)-fermi(E,Ef-V));
+		spincurrent2 = (1./(4.*M_PI))*real(TOT2.trace())*(fermi(E,Ef)+fermi(E,Ef-V));
 		result1.emplace_back(spincurrent1);
 		result2.emplace_back(spincurrent2);
 		GL = (OM - NM2 -T*GL*T).inverse();
@@ -144,9 +159,9 @@ vector<double> int_theta(double x, double z, double a, double E, double Ef, int 
 		integrate = f(x, z, a, E, Ef, N, theta);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
-				result[i] += (0.5/n)*integrate[i];
+				result[i] += (M_PI*0.5/n)*integrate[i];
 			else 
-				result[i] += (1./n)*integrate[i];
+				result[i] += (M_PI/n)*integrate[i];
 		}
 	}	
 	return result;
@@ -244,13 +259,13 @@ int main()
 	// plot output of spincurrent against energy
 	string Mydata;
 	ofstream Myfile;	
-	Mydata = "tmp.txt";
+	Mydata = "keld_old.txt";
 	/* Mydata = "eq_sc_fixed_k_no_V.txt"; */
 	Myfile.open( Mydata.c_str(),ios::trunc );
-	const double Ef = -0.3;
+	const double Ef = 0.0;
 
 	// number of spacer layers
-	int N = 11;
+	int N = 22;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */

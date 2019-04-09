@@ -116,7 +116,7 @@ VectorXd f(a_struct &params) {
 	params.E = 0.;
 	VectorXcd result_complex(params.N);
 	result_complex.fill(0.);
-	for (int j=0; j!=10; j++){
+	for (int j=0; j!=15; j++){
 		params.E = params.Ef + (2.*j + 1.)*params.kT*M_PI*i;
 		result_complex = result_complex + Rspace(0, 0, params);
 		/* result_complex = result_complex + kspace_complex(params, &Rspace, 0, 0); */
