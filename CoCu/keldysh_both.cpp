@@ -7,26 +7,28 @@
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/src/Core/util/MKL_support.h>
 #include <vector>
+#include "CoCuCo.h"
 #define EIGEN_USE_MKL_ALL
 
 using namespace Eigen;
 using namespace std;
 typedef complex<double> dcomp;
+typedef Matrix<complex<double>, 9, 9> M9;
 
-double fermi(double arg, double Ef){
-	const double k = 8.617342857e-5/13.6058;
+dcomp fermi(dcomp arg, double Ef){
+	const double k = 8.617e-5/13.6058;
 	const double T = 300;
 	double kT = k*T;
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
-vector<double> f(double x, double z, double a, double E, double Ef, int N, double theta) {
+vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double theta, int myswitch, double V) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
-	dcomp i;
+	dcomp i = -1;
+	i = sqrt(i);
 	double F = cos(x*a)+cos(z*a);
 
 	/* const double V = 0.0; */
-	const double V = 0.3;
 	const double t = 0.5;
 	const double nab = -0.175;
 	Matrix2cd T, NM1, NM2, FM1, FM2, ins, I, S;
@@ -43,15 +45,12 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	S << cos(theta/2.),sin(theta/2.),-sin(theta/2.),cos(theta/2.);
 	FM2 = FM2 - I*V;
 	FM2 = S.inverse()*FM2*S;
-	i=-1;
-	i=sqrt(i);
-	const dcomp im =(1e-6)*i;
 //apply the bias to the RHS
 	NM2 = NM2 - I*V;
 	/* ins = ins - I*V; */
 	/* ins = ins + I*V; */
 
-	Matrix2cd OMV2=(E+im)*I-FM2-2.*T*F;
+	Matrix2cd OMV2=E*I-FM2-2.*T*F;
 
 	Matrix4cd X2,O2;
 	X2 << 	0,	0,	1/t,	0,
@@ -67,10 +66,10 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	Matrix2cd GR_dagg = GR.adjoint();
 	Matrix2cd T_dagg = T.adjoint();
 
-	Matrix2cd OM = (E+im)*I - 2.*T*F;
+	Matrix2cd OM = E*I - 2.*T*F;
 
-	/* Matrix2cd OMV1=(E+im)*I-FM1-2.*T*F; */
-	Matrix2cd OMV1=(E+im)*I-NM1-2.*T*F;
+	/* Matrix2cd OMV1=E*I-NM1-2.*T*F; */
+	Matrix2cd OMV1=E*I-FM1-2.*T*F;
 
 	Matrix4cd X,O;
 	X << 	0,	0,	1/t,	0,
@@ -83,6 +82,11 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	Matrix2cd b = O.topRightCorner(2,2);
 	Matrix2cd d = O.bottomRightCorner(2,2);
 	Matrix2cd GL = b*d.inverse();
+	/* cout<<"energy = "<<E<<endl<<endl; */
+	/* cout<<"LHS SGF"<<endl; */
+	/* cout<<GL<<endl<<endl; */
+	/* cout<<"RHS SGF"<<endl; */
+	/* cout<<GR<<endl<<endl; */
 
 	Matrix2cd Pauli, xPau, yPau, zPau;
 	xPau << 0.,1.,1.,0.;
@@ -90,8 +94,8 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 	zPau << 1.,0.,0.,-1.;
 
 	Pauli = yPau;
-	double spincurrent1, spincurrent2;
-	Matrix2cd A,B,TOT1, TOT2;
+	double spincurrent;
+	Matrix2cd A,B,TOT,GM;
 //lim is thickness of layer 2
 	const int lim = 1;
 //build thickness of layer 2 to lim layers
@@ -108,27 +112,47 @@ vector<double> f(double x, double z, double a, double E, double Ef, int N, doubl
 		GL = (OM - FM1 -T*GL*T).inverse();
 	}
 //adlayer layer 2 from layer 1 to spacer thickness, N
-	vector<double> result1, result2, result_tot;
-	result1.reserve(N);
-	result2.reserve(N);
-	result_tot.reserve(N);
+	vector<double> result;
+	result.reserve(N);
+	/* if (myswitch == 1) */
+	/* 	cout<<GR<<endl<<endl<<GL<<endl<<endl; */
+	Matrix2cd tmp1, tmp2;
 	for (int it=0; it < N; ++it){
+		/* tmp1 = GL*T; */
+		/* tmp2 = T_dagg*tmp1; */
+		/* tmp1 = GR*tmp2; */
+		/* tmp2 = I - tmp1; */
+		/* A = tmp2.inverse(); */
 		A = (I-GR*T_dagg*GL*T).inverse();
+		/* tmp2 = GL.adjoint(); */
+		/* tmp1 = tmp2*T; */
+		/* tmp2 = T_dagg*tmp1; */
+		/* tmp1 = GR_dagg*tmp2; */
+		/* tmp2 = I - tmp1; */
+		/* B = tmp2.inverse(); */
 		B = (I-GR_dagg*T_dagg*GL.adjoint()*T).inverse();
-		TOT1 = (GL*T*A*B*GR_dagg*T_dagg-A*B+0.5*(A+B))*Pauli;
-		TOT2 = (B.adjoint() - A)*Pauli;
-		spincurrent1 = (1./(2.*M_PI))*real(TOT1.trace())*(fermi(E,Ef)-fermi(E,Ef-V));
-		spincurrent2 = (1./(4.*M_PI))*real(TOT2.trace())*(fermi(E,Ef)+fermi(E,Ef-V));
-		result1.emplace_back(spincurrent1);
-		result2.emplace_back(spincurrent2);
+		/* B = (I-T_dagg*GL*T*GR).inverse(); */
+		if (myswitch == 0){
+			TOT = (GL*T*A*B*GR_dagg*T_dagg-A*B+0.5*(A+B))*Pauli;
+			spincurrent = (1./(2.*M_PI))*real(TOT.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
+		}
+		if (myswitch == 1){
+			TOT = (B.adjoint()-A)*Pauli;
+			spincurrent = .5*imag(TOT.trace());
+		}
+		result.emplace_back(spincurrent);
 		GL = (OM - NM2 -T*GL*T).inverse();
+		/* cout<<"N = "<<it<<endl; */
+		/* cout<<"LHS SGF"<<endl; */
+		/* cout<<GL<<endl; */
 	}
-	for (int ii = 0; ii < N; ii++)
-		result_tot[ii] = result1[ii] + result2[ii];
-	return result_tot;
+	/* for (int ii = 0; ii < N; ii++) */
+	/* 	result_tot[ii] = result1[ii] + result2[ii]; */
+	return result;
+	/* return result_tot; */
 }
 
-vector<double> int_theta(double x, double z, double a, double E, double Ef, int N){
+vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N, int myswitch, double V){
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -138,12 +162,13 @@ vector<double> int_theta(double x, double z, double a, double E, double Ef, int 
 	double theta;
 
 	const int n = 10;
+	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(x, z, a, E, Ef, N, theta);
+		integrate = f(x, z, a, E, Ef, N, theta, myswitch, V);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
-				result[i] += (M_PI*0.5/n)*integrate[i];
+				result[i] += M_PI*(0.5/n)*integrate[i];
 			else 
 				result[i] += (M_PI/n)*integrate[i];
 		}
@@ -153,7 +178,7 @@ vector<double> int_theta(double x, double z, double a, double E, double Ef, int 
 
 /* double pass(double E, void * params) */
 
-vector<double> int_energy(double x, double z, double a, double Ef, int N){
+vector<double> int_energy(double x, double z, double a, double Ef, int N, double V){
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -162,8 +187,11 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 		result[i] = 0.;
 
 	double E;
-	double end = 1.5;
-	double start = -5.0;
+	dcomp E_send;
+	dcomp im = -1;
+	im = sqrt(im);
+	double end = 0.1;
+	double start = -0.4;
 
 	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000); */
 	/* double error, ans; */
@@ -182,16 +210,12 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 	/* gsl_integration_qags (&F, start, end, 0, 1e-2, 1000, w, &ans, &error); */
 	/* gsl_integration_workspace_free (w); */
 
-	/* integrate = int_theta(x, z, a, E, Ef, N); */
-	/* for (int i = 0; i < N; i++) */
-	/* 	result[i] = integrate[i]; */
-
-	/* const int n = 20000; */
-	const int n = 82000;
+	const int n = 1000;
 	double factor = (end - start)/(n*1.);
 	for (int k=0; k<n+1; k++) {
 		E = start + k*(end-start)/(n*1.);
-		integrate = int_theta(x, z, a, E, Ef, N);
+		E_send = E + 1e-6*im;
+		integrate = int_theta(x, z, a, E_send, Ef, N, 0, V);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += 0.5*factor*integrate[i];
@@ -201,6 +225,41 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 	}	
 
 	return result;
+}
+
+vector<double> switching(double x, double z, double a, double Ef, int N){
+	vector<double> result1, result2, integrate;
+	result1.reserve(N);
+	/* double V = 0.0; */
+	double V = 0.3;
+	result1 = int_energy(x, z, a, Ef, N, V);
+	integrate.reserve(N);
+	result2.reserve(N);
+	for (int l = 0; l < N; l++)
+		result2[l] = 0.;
+	dcomp i;
+	i = -1.;
+	i = sqrt(i);
+	dcomp E = 0.;
+	const double k = 8.617e-5/13.6058;//TODO this exist above as well..
+	const double T = 300;// need to reconcile...
+	double kT = k*T;
+	for (int j=0; j!=15; j++){
+		E = Ef + (2.*j + 1.)*kT*M_PI*i;
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
+		for (int l = 0; l < N; l++)
+			result2[l] += kT*integrate[l]; 
+		E = Ef - V + (2.*j + 1.)*kT*M_PI*i;
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
+		for (int l = 0; l < N; l++)
+			result2[l] += kT*integrate[l]; 
+	}
+	vector<double> total;
+	total.reserve(N);
+	for (int l = 0; l < N; l++)
+		total[l] = result1[l] + result2[l];
+	/* return result2; */
+	return total;
 }
 
 vector<double> int_kpoints(double a, double Ef, int N){
@@ -223,7 +282,8 @@ vector<double> int_kpoints(double a, double Ef, int N){
 					counter++;
 					z = M_PI*l/n;
 					/* integrate = int_theta(x, z, 1, Ef, Ef, N); */
-					integrate = int_energy(x, z, 1, Ef, N);
+					/* integrate = int_energy(x, z, 1, Ef, N); */
+					integrate = switching(x, z, 1, Ef, N);
 					for (int i = 0; i < N; i++){
 						if ((k==1) && (l==1))
 							result[i] += factor*0.5*integrate[i];
@@ -248,21 +308,53 @@ int main()
 	// plot output of spincurrent against energy
 	string Mydata;
 	ofstream Myfile;	
-	Mydata = "keld_old2.txt";
-	/* Mydata = "eq_sc_fixed_k_no_V.txt"; */
+	/* Mydata = "AB.txt"; */
+	Mydata = "sc_fixed_k.txt";
+	/* Mydata = "sc.txt"; */
 	Myfile.open( Mydata.c_str(),ios::trunc );
 	const double Ef = 0.0;
+	/* const double Ef = -0.3; */
+	vector<double> Co1, Co2, Cu1, Cu2;
+	Co1.reserve(10); Co2.reserve(10); Cu1.reserve(10); Cu2.reserve(10);
+	Co1 = param(1,1); Co2 = param(1,2); Cu1 = param(2,1); Cu2 = param(2,2);
+	M9 Co_u, Co_d, Cu;
+	Co_d = U(1,0);
+	Co_u = U(1,1);
+	Cu = U(2,0);
+	vector<double> CoCu1, CoCu2, CuCo1, CuCo2;
+	CoCu1.reserve(10); CoCu2.reserve(10); CuCo1.reserve(10); CuCo2.reserve(10);
+	for (int k = 0; k < 10; k++){
+		CoCu1[k] = gmean(Co1[k], Cu1[k]);
+		CuCo1[k] = gmean(Cu1[k], Co1[k]);
+		CoCu2[k] = gmean(Co2[k], Cu2[k]);
+		CuCo2[k] = gmean(Cu2[k], Co2[k]);
+	}
+	double xx, yy;
+	for (int k = -1; k < 2; k += 2){
+		for (int l = -1; l < 2; l += 2){
+		}
+	}
+
+	  /* double x, y, z; */
+	  /* Vector3d X, Y, Z; */
+	  /* X << 1, 0, 0; */
+	  /* Y << 0, 1, 0; */
+	  /* Z << 0, 0, 1; */
+	  /* x = pos.dot(X)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
+	  /* y = pos.dot(Y)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
+	  /* z = pos.dot(Z)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
 
 	// number of spacer layers
-	int N = 22;
+	int N = 11;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
-	answer = int_energy(0, 0, 1, Ef, N);
+	/* answer = switching(0, 0, 1, Ef, N); */
+	/* answer = int_energy(0, 0, 1, Ef, N); */
 	/* answer = int_kpoints(1, Ef, N); */
 	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */
-	for (int i = 1; i < N; i++){
-		Myfile<<i<<" "<<answer[i]<<endl;
-	}
+	/* for (int i = 1; i < N; i++){ */
+	/* 	Myfile<<scientific<<i<<" "<<answer[i]<<endl; */
+	/* } */
 	return 0;
 }

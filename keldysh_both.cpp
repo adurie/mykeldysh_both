@@ -20,14 +20,13 @@ dcomp fermi(dcomp arg, double Ef){
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
-vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double theta, int myswitch) {
+vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double theta, int myswitch, double V) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
 	double F = cos(x*a)+cos(z*a);
 
 	/* const double V = 0.0; */
-	const double V = 0.3;
 	const double t = 0.5;
 	const double nab = -0.175;
 	Matrix2cd T, NM1, NM2, FM1, FM2, ins, I, S;
@@ -67,8 +66,8 @@ vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double
 
 	Matrix2cd OM = E*I - 2.*T*F;
 
-	Matrix2cd OMV1=E*I-NM1-2.*T*F;
-	/* Matrix2cd OMV1=E*I-FM1-2.*T*F; */
+	/* Matrix2cd OMV1=E*I-NM1-2.*T*F; */
+	Matrix2cd OMV1=E*I-FM1-2.*T*F;
 
 	Matrix4cd X,O;
 	X << 	0,	0,	1/t,	0,
@@ -129,14 +128,15 @@ vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double
 		/* tmp1 = GR_dagg*tmp2; */
 		/* tmp2 = I - tmp1; */
 		/* B = tmp2.inverse(); */
-		B = -(I-GR_dagg*T_dagg*GL.adjoint()*T).inverse();
+		B = (I-GR_dagg*T_dagg*GL.adjoint()*T).inverse();
+		/* B = (I-T_dagg*GL*T*GR).inverse(); */
 		if (myswitch == 0){
 			TOT = (GL*T*A*B*GR_dagg*T_dagg-A*B+0.5*(A+B))*Pauli;
 			spincurrent = (1./(2.*M_PI))*real(TOT.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
 		}
 		if (myswitch == 1){
-			TOT = (B-A)*Pauli;
-			spincurrent = imag(TOT.trace())*(1. + V*V/4.);
+			TOT = (B.adjoint()-A)*Pauli;
+			spincurrent = .5*imag(TOT.trace());
 		}
 		result.emplace_back(spincurrent);
 		GL = (OM - NM2 -T*GL*T).inverse();
@@ -150,7 +150,7 @@ vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double
 	/* return result_tot; */
 }
 
-vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N, int myswitch){
+vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N, int myswitch, double V){
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -163,7 +163,7 @@ vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N
 	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(x, z, a, E, Ef, N, theta, myswitch);
+		integrate = f(x, z, a, E, Ef, N, theta, myswitch, V);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += M_PI*(0.5/n)*integrate[i];
@@ -176,7 +176,7 @@ vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N
 
 /* double pass(double E, void * params) */
 
-vector<double> int_energy(double x, double z, double a, double Ef, int N){
+vector<double> int_energy(double x, double z, double a, double Ef, int N, double V){
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -188,8 +188,8 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
-	double end = 0.4;
-	double start = -1.9;
+	double end = 0.1;
+	double start = -0.4;
 
 	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000); */
 	/* double error, ans; */
@@ -208,12 +208,12 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 	/* gsl_integration_qags (&F, start, end, 0, 1e-2, 1000, w, &ans, &error); */
 	/* gsl_integration_workspace_free (w); */
 
-	const int n = 20000;
+	const int n = 1000;
 	double factor = (end - start)/(n*1.);
 	for (int k=0; k<n+1; k++) {
-		E = start + k*(end-start)/n;
+		E = start + k*(end-start)/(n*1.);
 		E_send = E + 1e-6*im;
-		integrate = int_theta(x, z, a, E_send, Ef, N, 0);
+		integrate = int_theta(x, z, a, E_send, Ef, N, 0, V);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += 0.5*factor*integrate[i];
@@ -228,7 +228,9 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N){
 vector<double> switching(double x, double z, double a, double Ef, int N){
 	vector<double> result1, result2, integrate;
 	result1.reserve(N);
-	result1 = int_energy(x, z, a, Ef, N);
+	/* double V = 0.0; */
+	double V = 0.3;
+	result1 = int_energy(x, z, a, Ef, N, V);
 	integrate.reserve(N);
 	result2.reserve(N);
 	for (int l = 0; l < N; l++)
@@ -242,7 +244,11 @@ vector<double> switching(double x, double z, double a, double Ef, int N){
 	double kT = k*T;
 	for (int j=0; j!=15; j++){
 		E = Ef + (2.*j + 1.)*kT*M_PI*i;
-		integrate = int_theta(x, z, a, E, Ef, N, 1);
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
+		for (int l = 0; l < N; l++)
+			result2[l] += kT*integrate[l]; 
+		E = Ef - V + (2.*j + 1.)*kT*M_PI*i;
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
 		for (int l = 0; l < N; l++)
 			result2[l] += kT*integrate[l]; 
 	}
@@ -302,12 +308,13 @@ int main()
 	ofstream Myfile;	
 	/* Mydata = "AB.txt"; */
 	Mydata = "sc_fixed_k.txt";
+	/* Mydata = "sc.txt"; */
 	Myfile.open( Mydata.c_str(),ios::trunc );
 	const double Ef = 0.0;
 	/* const double Ef = -0.3; */
 
 	// number of spacer layers
-	int N = 21;
+	int N = 11;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
