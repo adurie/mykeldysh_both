@@ -9,26 +9,54 @@
 #include <vector>
 #include "CoCuCo.h"
 #define EIGEN_USE_MKL_ALL
+// important note - presently the code assumes fcc only - integration
+// in addition it is assumed SK for neighbour terms are the same for each spin
 
 using namespace Eigen;
 using namespace std;
 typedef complex<double> dcomp;
 typedef Matrix<complex<double>, 9, 9> M9;
+typedef vector<Vector3d, aligned_allocator<Vector3d>> vec3;
+typedef vector<Matrix<dcomp, 9, 9>, aligned_allocator<Matrix<dcomp, 9, 9>>> vM;
+typedef Matrix<dcomp, 18, 18> ddmat;
+typedef Matrix<dcomp, 36, 36> dddmat;
 
-dcomp fermi(dcomp arg, double Ef){
+//calculates g at the interfaces
+ddmat gs(const ddmat &OM, const ddmat &T)
+{
+	ddmat zero = ddmat::Zero();
+	ddmat Tinv;
+	Tinv = T.inverse();
+	Matrix<dcomp, 36, 36> X,O;
+	X.topLeftCorner(18, 18) = zero;
+	X.topRightCorner(18, 18) = Tinv;
+	X.bottomLeftCorner(18, 18) = -T.adjoint();
+	X.bottomRightCorner(18, 18) = OM*Tinv;
+	ComplexEigenSolver<Matrix<dcomp, 36, 36>> ces;
+	ces.compute(X);
+	O = ces.eigenvectors();
+	ddmat b = O.topRightCorner(18, 18);
+	ddmat d = O.bottomRightCorner(18, 18);
+	ddmat GR;
+	GR = b*d.inverse();
+	return GR;
+}
+
+dcomp fermi(const dcomp arg, const double Ef){
 	const double k = 8.617e-5/13.6058;
 	const double T = 300;
 	double kT = k*T;
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
-vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double theta, int myswitch, double V) {
+vector<double> f(const double x, const double z, const double a, const dcomp E, const double Ef, const int N,
+	       	const double theta, const int myswitch, const double V,	const vec3 &pos, const vec3 &basis, 
+		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
-	double F = cos(x*a)+cos(z*a);
+	double F = 5.;
 
-	/* const double V = 0.0; */
 	const double t = 0.5;
 	const double nab = -0.175;
 	Matrix2cd T, NM1, NM2, FM1, FM2, ins, I, S;
@@ -152,7 +180,9 @@ vector<double> f(double x, double z, double a, dcomp E, double Ef, int N, double
 	/* return result_tot; */
 }
 
-vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N, int myswitch, double V){
+vector<double> int_theta(const double x, const double z, const double a, const dcomp E,
+	       	const double Ef, const int N, const int myswitch, const double V, const vec3 &pos, const vec3 &basis, 
+		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -165,7 +195,7 @@ vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N
 	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(x, z, a, E, Ef, N, theta, myswitch, V);
+		integrate = f(x, z, a, E, Ef, N, theta, myswitch, V, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += M_PI*(0.5/n)*integrate[i];
@@ -176,9 +206,8 @@ vector<double> int_theta(double x, double z, double a, dcomp E, double Ef, int N
 	return result;
 }
 
-/* double pass(double E, void * params) */
-
-vector<double> int_energy(double x, double z, double a, double Ef, int N, double V){
+vector<double> int_energy(const double x, const double z, const double a, const double Ef, const int N, const double V, const vec3 &pos, const vec3 &basis, 
+		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -215,7 +244,7 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N, double
 	for (int k=0; k<n+1; k++) {
 		E = start + k*(end-start)/(n*1.);
 		E_send = E + 1e-6*im;
-		integrate = int_theta(x, z, a, E_send, Ef, N, 0, V);
+		integrate = int_theta(x, z, a, E_send, Ef, N, 0, V, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += 0.5*factor*integrate[i];
@@ -227,12 +256,13 @@ vector<double> int_energy(double x, double z, double a, double Ef, int N, double
 	return result;
 }
 
-vector<double> switching(double x, double z, double a, double Ef, int N){
+vector<double> switching(const double x, const double z, const double a, const double Ef, const int N, const vec3 &pos, const vec3 &basis, 
+		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 	vector<double> result1, result2, integrate;
 	result1.reserve(N);
 	/* double V = 0.0; */
 	double V = 0.3;
-	result1 = int_energy(x, z, a, Ef, N, V);
+	result1 = int_energy(x, z, a, Ef, N, V, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 	integrate.reserve(N);
 	result2.reserve(N);
 	for (int l = 0; l < N; l++)
@@ -246,11 +276,11 @@ vector<double> switching(double x, double z, double a, double Ef, int N){
 	double kT = k*T;
 	for (int j=0; j!=15; j++){
 		E = Ef + (2.*j + 1.)*kT*M_PI*i;
-		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 		for (int l = 0; l < N; l++)
 			result2[l] += kT*integrate[l]; 
 		E = Ef - V + (2.*j + 1.)*kT*M_PI*i;
-		integrate = int_theta(x, z, a, E, Ef, N, 1, V);
+		integrate = int_theta(x, z, a, E, Ef, N, 1, V, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 		for (int l = 0; l < N; l++)
 			result2[l] += kT*integrate[l]; 
 	}
@@ -262,7 +292,7 @@ vector<double> switching(double x, double z, double a, double Ef, int N){
 	return total;
 }
 
-vector<double> int_kpoints(double a, double Ef, int N){
+vector<double> int_kpoints(const double a, const double Ef, const int N){
 	vector<double> result;
 	vector<double> integrate;
 	result.reserve(N);
@@ -283,7 +313,7 @@ vector<double> int_kpoints(double a, double Ef, int N){
 					z = M_PI*l/n;
 					/* integrate = int_theta(x, z, 1, Ef, Ef, N); */
 					/* integrate = int_energy(x, z, 1, Ef, N); */
-					integrate = switching(x, z, 1, Ef, N);
+					/* integrate = switching(x, z, 1, Ef, N); */
 					for (int i = 0; i < N; i++){
 						if ((k==1) && (l==1))
 							result[i] += factor*0.5*integrate[i];
@@ -314,6 +344,9 @@ int main()
 	Myfile.open( Mydata.c_str(),ios::trunc );
 	const double Ef = 0.0;
 	/* const double Ef = -0.3; */
+
+	//This block creates the SK tight binding Hamiltonians for onsite, first 
+	//and second neighbours for Co and Cu in fcc
 	vector<double> Co1, Co2, Cu1, Cu2;
 	Co1.reserve(10); Co2.reserve(10); Cu1.reserve(10); Cu2.reserve(10);
 	Co1 = param(1,1); Co2 = param(1,2); Cu1 = param(2,1); Cu2 = param(2,2);
@@ -321,35 +354,146 @@ int main()
 	Co_d = U(1,0);
 	Co_u = U(1,1);
 	Cu = U(2,0);
-	vector<double> CoCu1, CoCu2, CuCo1, CuCo2;
-	CoCu1.reserve(10); CoCu2.reserve(10); CuCo1.reserve(10); CuCo2.reserve(10);
+	vector<double> CoCu1, CoCu2;
+	CoCu1.reserve(10); CoCu2.reserve(10);
+	double tmp;
+	//This loop creates the geometric means used at the interfaces between elements
 	for (int k = 0; k < 10; k++){
-		CoCu1[k] = gmean(Co1[k], Cu1[k]);
-		CuCo1[k] = gmean(Cu1[k], Co1[k]);
-		CoCu2[k] = gmean(Co2[k], Cu2[k]);
-		CuCo2[k] = gmean(Cu2[k], Co2[k]);
+		tmp = gmean(Co1[k], Cu1[k]);
+		CoCu1.emplace_back(tmp);
+		tmp = gmean(Co2[k], Cu2[k]);
+		CoCu2.emplace_back(tmp);
 	}
+	//This section defines the basis atoms 
+	Vector3d bas1, bas2, tmp_vec;
+	vec3 basis;
+	basis.reserve(2);//magic 2 is number of subatoms
+	bas1<< 0., 0., 0.;
+	bas2<< 0.5, 0.5, 0.;
+	basis.emplace_back(bas1);
+	basis.emplace_back(bas2);
+	//This section generates the Hamiltonians from SK parameters and NN positions
 	double xx, yy;
+	double x, y, z;
+	Vector3d X, Y, Z;
+	X << 1, 0, 0;
+	Y << 0, 1, 0;
+	Z << 0, 0, 1;
+	vM cobalt_up, cobalt_dn, copper, cob_cop_up, cob_cop_dn;
+	vec3 pos;
+	pos.reserve(19);
+	cobalt_up.reserve(19); cobalt_dn.reserve(19); copper.reserve(19); cob_cop_up.reserve(19);
+	cob_cop_dn.reserve(19);
+	tmp_vec << 0., 0., 0.;
+	pos.emplace_back(tmp_vec);
+	cobalt_up.emplace_back(Co_u);
+	cobalt_dn.emplace_back(Co_d);
+	copper.emplace_back(Cu);
+	cob_cop_up.emplace_back(Cu); // In theory this will not be used
+	cob_cop_dn.emplace_back(Cu); // In theory this will not be used
+	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
+	Matrix<dcomp, 9, 9> tmp_mat;
+	//This for 1st neighbours
 	for (int k = -1; k < 2; k += 2){
 		for (int l = -1; l < 2; l += 2){
+			xx = 0.5*k;
+			yy = 0.5*l;
+			tmp_vec << xx, yy, 0;
+			pos.emplace_back(tmp_vec);
+			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			tmp_mat = eint1(Co1, x, y, z);
+			cobalt_up.emplace_back(tmp_mat);
+			cobalt_dn.emplace_back(tmp_mat);
+			tmp_mat = eint1(Cu1, x, y, z);
+			copper.emplace_back(tmp_mat);
+			tmp_mat = eint1(CoCu1, x, y, z);
+			cob_cop_up.emplace_back(tmp_mat);
+			cob_cop_dn.emplace_back(tmp_mat);
+
+			tmp_vec << 0, xx, yy;
+			pos.emplace_back(tmp_vec);
+			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			tmp_mat = eint1(Co1, x, y, z);
+			cobalt_up.emplace_back(tmp_mat);
+			cobalt_dn.emplace_back(tmp_mat);
+			tmp_mat = eint1(Cu1, x, y, z);
+			copper.emplace_back(tmp_mat);
+			tmp_mat = eint1(CoCu1, x, y, z);
+			cob_cop_up.emplace_back(tmp_mat);
+			cob_cop_dn.emplace_back(tmp_mat);
+
+			tmp_vec << xx, 0, yy;
+			pos.emplace_back(tmp_vec);
+			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+			tmp_mat = eint1(Co1, x, y, z);
+			cobalt_up.emplace_back(tmp_mat);
+			cobalt_dn.emplace_back(tmp_mat);
+			tmp_mat = eint1(Cu1, x, y, z);
+			copper.emplace_back(tmp_mat);
+			tmp_mat = eint1(CoCu1, x, y, z);
+			cob_cop_up.emplace_back(tmp_mat);
+			cob_cop_dn.emplace_back(tmp_mat);
 		}
 	}
 
-	  /* double x, y, z; */
-	  /* Vector3d X, Y, Z; */
-	  /* X << 1, 0, 0; */
-	  /* Y << 0, 1, 0; */
-	  /* Z << 0, 0, 1; */
-	  /* x = pos.dot(X)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
-	  /* y = pos.dot(Y)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
-	  /* z = pos.dot(Z)/sqrt(pos(0)*pos(0) + pos(1)*pos(1) + pos(2)*pos(2)); */ 
+	//This for 2nd neighbours
+	for (int k = -1; k < 2; k += 2){
+		xx = 1.*k;
+		tmp_vec << xx, 0, 0;
+		pos.emplace_back(tmp_vec);
+		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		tmp_mat = eint1(Co2, x, y, z);
+		cobalt_up.emplace_back(tmp_mat);
+		cobalt_dn.emplace_back(tmp_mat);
+		tmp_mat = eint1(Cu2, x, y, z);
+		copper.emplace_back(tmp_mat);
+		tmp_mat = eint1(CoCu2, x, y, z);
+		cob_cop_up.emplace_back(tmp_mat);
+		cob_cop_dn.emplace_back(tmp_mat);
+
+		tmp_vec << 0, xx, 0;
+		pos.emplace_back(tmp_vec);
+		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		tmp_mat = eint1(Co2, x, y, z);
+		cobalt_up.emplace_back(tmp_mat);
+		cobalt_dn.emplace_back(tmp_mat);
+		tmp_mat = eint1(Cu2, x, y, z);
+		copper.emplace_back(tmp_mat);
+		tmp_mat = eint1(CoCu2, x, y, z);
+		cob_cop_up.emplace_back(tmp_mat);
+		cob_cop_dn.emplace_back(tmp_mat);
+
+		tmp_vec << 0, 0, xx;
+		pos.emplace_back(tmp_vec);
+		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+		tmp_mat = eint1(Co2, x, y, z);
+		cobalt_up.emplace_back(tmp_mat);
+		cobalt_dn.emplace_back(tmp_mat);
+		tmp_mat = eint1(Cu2, x, y, z);
+		copper.emplace_back(tmp_mat);
+		tmp_mat = eint1(CoCu2, x, y, z);
+		cob_cop_up.emplace_back(tmp_mat);
+		cob_cop_dn.emplace_back(tmp_mat);
+	}
 
 	// number of spacer layers
 	int N = 11;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
-	/* answer = switching(0, 0, 1, Ef, N); */
+	answer = switching(0, 0, 1, Ef, N, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 	/* answer = int_energy(0, 0, 1, Ef, N); */
 	/* answer = int_kpoints(1, Ef, N); */
 	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */

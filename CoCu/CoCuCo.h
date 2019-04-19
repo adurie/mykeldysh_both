@@ -7,8 +7,6 @@
 
 using namespace std;
 using namespace Eigen;
-typedef Matrix2d m2d;
-typedef vector<Matrix2d, aligned_allocator<Matrix2d>> vm2d;
 
 double gmean(double x, double y){
 	double gmean;
