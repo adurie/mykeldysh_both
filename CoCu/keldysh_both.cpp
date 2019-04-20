@@ -49,13 +49,110 @@ dcomp fermi(const dcomp arg, const double Ef){
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
+M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x, const double z){
+	double max_dist = 1. + 1e-4; //TODO make general - this caters for 2nd NN only
+	double distance;
+	Vector3d K;
+	dcomp i = -1;
+	i = sqrt(i);
+	K << x, 0., z;
+	M9 result;
+	result.fill(0.);
+	Vector3d tmp_vec;
+	for (int k = 0; k < pos.size(); k++){
+		tmp_vec = pos[k] - basis;
+		if (abs(tmp_vec(1)) < 1e-5){
+			distance = 0;
+			for (int l = 0; l < 3; l++)
+				distance += tmp_vec(l)*tmp_vec(l);
+			distance = sqrt(distance);
+			if (distance <= max_dist)
+				result = result + U[k]*exp(i*tmp_vec.dot(K));
+		}
+	}
+	return result;
+}
+
 vector<double> f(const double x, const double z, const double a, const dcomp E, const double Ef, const int N,
-	       	const double theta, const int myswitch, const double V,	const vec3 &pos, const vec3 &basis, 
+	       	const double theta, const int myswitch, const double V,	const Vector3d &t, const vec3 &pos, const vec3 &basis, 
 		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
-	double F = 5.;
+
+	M9 U, U12, U21;
+	U = InPlaneH(pos, basis[0], copper, x, z);
+	U12 = InPlaneH(pos, basis[1], copper, x, z);
+	U21 = InPlaneH(pos, -basis[1], copper, x, z);
+	ddmat NM;
+	NM.topLeftCorner(9,9) = U;
+	NM.topRightCorner(9,9) = U12;
+	NM.bottomLeftCorner(9,9) = U21;
+	NM.bottomRightCorner(9,9) = U;
+
+	U = InPlaneH(pos, t + basis[0], copper, x, z);
+	U12 = InPlaneH(pos, t + basis[1], copper, x, z);
+	U21 = InPlaneH(pos, t - basis[1], copper, x, z);
+	ddmat NM_T;
+	NM_T.topLeftCorner(9,9) = U;
+	NM_T.topRightCorner(9,9) = U12;
+	NM_T.bottomLeftCorner(9,9) = U21;
+	NM_T.bottomRightCorner(9,9) = U;
+
+	U = InPlaneH(pos, basis[0], cobalt_up, x, z);
+	U12 = InPlaneH(pos, basis[1], cobalt_up, x, z);
+	U21 = InPlaneH(pos, -basis[1], cobalt_up, x, z);
+	ddmat FM_up;
+	FM_up.topLeftCorner(9,9) = U;
+	FM_up.topRightCorner(9,9) = U12;
+	FM_up.bottomLeftCorner(9,9) = U21;
+	FM_up.bottomRightCorner(9,9) = U;
+
+	U = InPlaneH(pos, t + basis[0], cobalt_up, x, z);
+	U12 = InPlaneH(pos, t + basis[1], cobalt_up, x, z);
+	U21 = InPlaneH(pos, t - basis[1], cobalt_up, x, z);
+	ddmat FM_T_up;
+	FM_T_up.topLeftCorner(9,9) = U;
+	FM_T_up.topRightCorner(9,9) = U12;
+	FM_T_up.bottomLeftCorner(9,9) = U21;
+	FM_T_up.bottomRightCorner(9,9) = U;
+
+	U = InPlaneH(pos, basis[0], cobalt_dn, x, z);
+	U12 = InPlaneH(pos, basis[1], cobalt_dn, x, z);
+	U21 = InPlaneH(pos, -basis[1], cobalt_dn, x, z);
+	ddmat FM_dn;
+	FM_dn.topLeftCorner(9,9) = U;
+	FM_dn.topRightCorner(9,9) = U12;
+	FM_dn.bottomLeftCorner(9,9) = U21;
+	FM_dn.bottomRightCorner(9,9) = U;
+
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	/* U = InPlaneH(pos, t + basis[0], cobalt_dn, x, z); */
+	/* U12 = InPlaneH(pos, t + basis[1], cobalt_dn, x, z); */
+	/* U21 = InPlaneH(pos, t - basis[1], cobalt_dn, x, z); */
+	/* ddmat FM_T_dn; */
+	/* FM_T_dn.topLeftCorner(9,9) = U; */
+	/* FM_T_dn.topRightCorner(9,9) = U12; */
+	/* FM_T_dn.bottomLeftCorner(9,9) = U21; */
+	/* FM_T_dn.bottomRightCorner(9,9) = U; */
+
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	//TODO there is a very high chance this will need to be edited so only
+	//differing atoms have gmean version! WE MAY NEED DIFFERING LAYERS FOR EACH INTERFACE!!
+	U = InPlaneH(pos, basis[0], cob_cop_dn, x, z);
+	U12 = InPlaneH(pos, basis[1], cob_cop_dn, x, z);
+	U21 = InPlaneH(pos, -basis[1], cobalt_dn, x, z);
+	ddmat FM_NM_T;
+	FM_NM_T.topLeftCorner(9,9) = U;
+	FM_NM_T.topRightCorner(9,9) = U12;
+	FM_NM_T.bottomLeftCorner(9,9) = U21;
+	FM_NM_T.bottomRightCorner(9,9) = U;
+	U21 = InPlaneH(pos, -basis[1], copper, x, z);
+	ddmat NM_FM_T;
+	NM_FM_T.topLeftCorner(9,9) = U;
+	NM_FM_T.topRightCorner(9,9) = U12;
+	NM_FM_T.bottomLeftCorner(9,9) = U21;
+	NM_FM_T.bottomRightCorner(9,9) = U;
 
 	const double t = 0.5;
 	const double nab = -0.175;
@@ -78,7 +175,7 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	/* ins = ins - I*V; */
 	/* ins = ins + I*V; */
 
-	Matrix2cd OMV2=E*I-FM2-2.*T*F;
+	Matrix2cd OMV2=E*I-FM2;
 
 	Matrix4cd X2,O2;
 	X2 << 	0,	0,	1/t,	0,
@@ -94,10 +191,10 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	Matrix2cd GR_dagg = GR.adjoint();
 	Matrix2cd T_dagg = T.adjoint();
 
-	Matrix2cd OM = E*I - 2.*T*F;
+	Matrix2cd OM = E*I;
 
-	/* Matrix2cd OMV1=E*I-NM1-2.*T*F; */
-	Matrix2cd OMV1=E*I-FM1-2.*T*F;
+	/* Matrix2cd OMV1=E*I-NM1; */
+	Matrix2cd OMV1=E*I-FM1;
 
 	Matrix4cd X,O;
 	X << 	0,	0,	1/t,	0,
@@ -370,6 +467,8 @@ int main()
 	basis.reserve(2);//magic 2 is number of subatoms
 	bas1<< 0., 0., 0.;
 	bas2<< 0.5, 0.5, 0.;
+	Vector3d t; //TODO distance between principle layers
+	t << 0., 1., 0.;
 	basis.emplace_back(bas1);
 	basis.emplace_back(bas2);
 	//This section generates the Hamiltonians from SK parameters and NN positions
@@ -394,7 +493,7 @@ int main()
 	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
 	Matrix<dcomp, 9, 9> tmp_mat;
 	//This for 1st neighbours
-	for (int k = -1; k < 2; k += 2){
+	for (int k = -1; k < 2; k += 2){//TODO this needs to be automated
 		for (int l = -1; l < 2; l += 2){
 			xx = 0.5*k;
 			yy = 0.5*l;
@@ -488,12 +587,24 @@ int main()
 		cob_cop_dn.emplace_back(tmp_mat);
 	}
 
+	/* M9 U, U12, U21; */
+	/* U = InPlaneH(pos, basis[0], copper, 0.8, 2.2); */
+	/* U12 = InPlaneH(pos, basis[1], copper, 0.8, 2.2); */
+	/* U21 = InPlaneH(pos, -basis[1], copper, 0.8, 2.2); */
+	/* ddmat UU; */
+	/* UU.topLeftCorner(9,9) = U; */
+	/* UU.topRightCorner(9,9) = U12; */
+	/* UU.bottomLeftCorner(9,9) = U21; */
+	/* UU.bottomRightCorner(9,9) = U; */
+	/* /1* cout<<UU.real()<<endl<<endl; *1/ */
+	/* cout<<UU.real()<<endl<<endl; */
+
 	// number of spacer layers
 	int N = 11;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
-	answer = switching(0, 0, 1, Ef, N, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+	/* answer = switching(0, 0, 1, Ef, N, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn); */
 	/* answer = int_energy(0, 0, 1, Ef, N); */
 	/* answer = int_kpoints(1, Ef, N); */
 	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */
