@@ -80,81 +80,93 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	dcomp i = -1;
 	i = sqrt(i);
 
-	M9 U, U12, U21;
-	U = InPlaneH(pos, basis[0], copper, x, z);
-	U12 = InPlaneH(pos, basis[1], copper, x, z);
-	U21 = InPlaneH(pos, -basis[1], copper, x, z);
-	ddmat NM;
-	NM.topLeftCorner(9,9) = U;
-	NM.topRightCorner(9,9) = U12;
-	NM.bottomLeftCorner(9,9) = U21;
-	NM.bottomRightCorner(9,9) = U;
+	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, 
+	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21,
+	   FM_T_ii, FM_T_12, FM_T_21, FM_NM_12, FM_NM_21, 
+	   FM_NM_T_ii, FM_NM_T_12, FM_NM_T_21;
+	//generate in plane Hamiltonians for simple bilayers
+	NM_ii = InPlaneH(pos,  basis[0], copper, x, z);
+	NM_12 = InPlaneH(pos,  basis[1], copper, x, z);
+	NM_21 = InPlaneH(pos, -basis[1], copper, x, z);
+	FM_up_ii = InPlaneH(pos,  basis[0], cobalt_up, x, z);
+	FM_up_12 = InPlaneH(pos,  basis[1], cobalt_up, x, z);
+	FM_up_21 = InPlaneH(pos, -basis[1], cobalt_up, x, z);
+	FM_dn_ii = InPlaneH(pos,  basis[0], cobalt_dn, x, z);
+	FM_dn_12 = InPlaneH(pos,  basis[1], cobalt_dn, x, z);
+	FM_dn_21 = InPlaneH(pos, -basis[1], cobalt_dn, x, z);
+	//generate hopping between simple bilayers of the same type
+	NM_T_ii = InPlaneH(pos, t + basis[0], copper, x, z);
+	NM_T_12 = InPlaneH(pos, t + basis[1], copper, x, z);
+	NM_T_21 = InPlaneH(pos, t - basis[1], copper, x, z);
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	FM_T_ii = InPlaneH(pos, t + basis[0], cobalt_up, x, z);
+	FM_T_12 = InPlaneH(pos, t + basis[1], cobalt_up, x, z);
+	FM_T_21 = InPlaneH(pos, t - basis[1], cobalt_up, x, z);
+	//additional off diagonal Hamiltonians needed for bilayers
+	//made of different atom types
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	FM_NM_12 = InPlaneH(pos,  basis[1], cob_cop_dn, x, z);
+	FM_NM_21 = InPlaneH(pos, -basis[1], cob_cop_dn, x, z);
+	FM_NM_T_ii = InPlaneH(pos, t + basis[0], cob_cop_dn, x, z);
+	FM_NM_T_12 = InPlaneH(pos, t + basis[1], cob_cop_dn, x, z);
+	FM_NM_T_21 = InPlaneH(pos, t - basis[1], cob_cop_dn, x, z);
 
-	U = InPlaneH(pos, t + basis[0], copper, x, z);
-	U12 = InPlaneH(pos, t + basis[1], copper, x, z);
-	U21 = InPlaneH(pos, t - basis[1], copper, x, z);
-	ddmat NM_T, NM_T_dagg;
-	NM_T.topLeftCorner(9,9) = U;
-	NM_T.topRightCorner(9,9) = U12;
-	NM_T.bottomLeftCorner(9,9) = U21;
-	NM_T.bottomRightCorner(9,9) = U;
+	ddmat FM_up, FM_dn, NM, NM_T, FM_T, FM_NM_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2;
+
+	NM.topLeftCorner(9,9) = NM_ii;
+	NM.topRightCorner(9,9) = NM_12;
+	NM.bottomLeftCorner(9,9) = NM_21;
+	NM.bottomRightCorner(9,9) = NM_ii;
+
+	NM_T.topLeftCorner(9,9) = NM_T_ii;
+	NM_T.topRightCorner(9,9) = NM_T_12;
+	NM_T.bottomLeftCorner(9,9) = NM_T_21;
+	NM_T.bottomRightCorner(9,9) = NM_T_ii;
+
+	FM_up.topLeftCorner(9,9) = FM_up_ii;
+	FM_up.topRightCorner(9,9) = FM_up_12;
+	FM_up.bottomLeftCorner(9,9) = FM_up_21;
+	FM_up.bottomRightCorner(9,9) = FM_up_ii;
+
+	FM_dn.topLeftCorner(9,9) = FM_dn_ii;
+	FM_dn.topRightCorner(9,9) = FM_dn_12;
+	FM_dn.bottomLeftCorner(9,9) = FM_dn_21;
+	FM_dn.bottomRightCorner(9,9) = FM_dn_ii;
+
+	FM_T.topLeftCorner(9,9) = FM_T_ii;
+	FM_T.topRightCorner(9,9) = FM_T_12;
+	FM_T.bottomLeftCorner(9,9) = FM_T_21;
+	FM_T.bottomRightCorner(9,9) = FM_T_ii;
+
+	FM_NM_T.topLeftCorner(9,9) = FM_NM_T_ii;
+	FM_NM_T.topRightCorner(9,9) = FM_NM_T_12; 
+	FM_NM_T.bottomLeftCorner(9,9) = FM_NM_T_21;
+	FM_NM_T.bottomRightCorner(9,9) = FM_NM_T_ii;
+
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	odd_l1_up.topLeftCorner(9,9) = FM_up_ii;
+	odd_l1_up.topRightCorner(9,9) = FM_NM_12;
+	odd_l1_up.bottomLeftCorner(9,9) = FM_NM_21;
+	odd_l1_up.bottomRightCorner(9,9) = NM_ii;
+
+	//TODO in this scheme so far hopping for spin up is the same as spin down
+	odd_l1_dn.topLeftCorner(9,9) = FM_dn_ii;
+	odd_l1_dn.topRightCorner(9,9) = FM_NM_12;
+	odd_l1_dn.bottomLeftCorner(9,9) = FM_NM_21;
+	odd_l1_dn.bottomRightCorner(9,9) = NM_ii;
+
+	odd_l1_T1.topLeftCorner(9,9) = FM_T_ii;
+	odd_l1_T1.topRightCorner(9,9) = FM_NM_T_12;
+	odd_l1_T1.bottomLeftCorner(9,9) = FM_T_21;
+	odd_l1_T1.bottomRightCorner(9,9) = FM_NM_T_ii;
+
+	odd_l1_T2.topLeftCorner(9,9) = FM_NM_T_ii;
+	odd_l1_T2.topRightCorner(9,9) = FM_NM_T_12;
+	odd_l1_T2.bottomLeftCorner(9,9) = NM_T_21;
+	odd_l1_T2.bottomRightCorner(9,9) = NM_T_ii;
+
+	ddmat NM_T_dagg;
 	NM_T_dagg = NM_T.adjoint();
-
-	U = InPlaneH(pos, basis[0], cobalt_up, x, z);
-	U12 = InPlaneH(pos, basis[1], cobalt_up, x, z);
-	U21 = InPlaneH(pos, -basis[1], cobalt_up, x, z);
-	ddmat FM_up;
-	FM_up.topLeftCorner(9,9) = U;
-	FM_up.topRightCorner(9,9) = U12;
-	FM_up.bottomLeftCorner(9,9) = U21;
-	FM_up.bottomRightCorner(9,9) = U;
-
-	U = InPlaneH(pos, t + basis[0], cobalt_up, x, z);
-	U12 = InPlaneH(pos, t + basis[1], cobalt_up, x, z);
-	U21 = InPlaneH(pos, t - basis[1], cobalt_up, x, z);
-	ddmat FM_T_up;
-	FM_T_up.topLeftCorner(9,9) = U;
-	FM_T_up.topRightCorner(9,9) = U12;
-	FM_T_up.bottomLeftCorner(9,9) = U21;
-	FM_T_up.bottomRightCorner(9,9) = U;
-
-	U = InPlaneH(pos, basis[0], cobalt_dn, x, z);
-	U12 = InPlaneH(pos, basis[1], cobalt_dn, x, z);
-	U21 = InPlaneH(pos, -basis[1], cobalt_dn, x, z);
-	ddmat FM_dn;
-	FM_dn.topLeftCorner(9,9) = U;
-	FM_dn.topRightCorner(9,9) = U12;
-	FM_dn.bottomLeftCorner(9,9) = U21;
-	FM_dn.bottomRightCorner(9,9) = U;
-
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	/* U = InPlaneH(pos, t + basis[0], cobalt_dn, x, z); */
-	/* U12 = InPlaneH(pos, t + basis[1], cobalt_dn, x, z); */
-	/* U21 = InPlaneH(pos, t - basis[1], cobalt_dn, x, z); */
-	/* ddmat FM_T_dn; */
-	/* FM_T_dn.topLeftCorner(9,9) = U; */
-	/* FM_T_dn.topRightCorner(9,9) = U12; */
-	/* FM_T_dn.bottomLeftCorner(9,9) = U21; */
-	/* FM_T_dn.bottomRightCorner(9,9) = U; */
-
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	//TODO there is a very high chance this will need to be edited so only
-	//differing atoms have gmean version! WE MAY NEED DIFFERING LAYERS FOR EACH INTERFACE!!
-	U = InPlaneH(pos, basis[0], cob_cop_dn, x, z);
-	U12 = InPlaneH(pos, basis[1], cob_cop_dn, x, z);
-	U21 = InPlaneH(pos, -basis[1], cobalt_dn, x, z);
-	ddmat FM_NM_T;
-	FM_NM_T.topLeftCorner(9,9) = U;
-	FM_NM_T.topRightCorner(9,9) = U12;
-	FM_NM_T.bottomLeftCorner(9,9) = U21;
-	FM_NM_T.bottomRightCorner(9,9) = U;
-	U21 = InPlaneH(pos, -basis[1], copper, x, z);
-	ddmat NM_FM_T;
-	NM_FM_T.topLeftCorner(9,9) = U;
-	NM_FM_T.topRightCorner(9,9) = U12;
-	NM_FM_T.bottomLeftCorner(9,9) = U21;
-	NM_FM_T.bottomRightCorner(9,9) = U;
-
 	ddmat I = ddmat::Identity();
 	/* ins << 5.0, 0., 0., 5.0; */
 	/* FM2 = FM1; */ 
@@ -174,39 +186,68 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 
 	ddmat OMup=E*I-FM_up;
 	ddmat OMdn=E*I-FM_dn;
+	ddmat OM = E*I;
 
-	ddmat FM_T_up_dagg = FM_T_up.adjoint();
-	ddmat GR_up = gs(OMup, FM_T_up_dagg);
-	/* ddmat FM_T_dn_dagg = FM_T_dn.adjoint(); */
-	ddmat GR_dn = gs(OMdn, FM_T_up_dagg);
-	ddmat GL_up = gs(OMup, FM_T_up);
-	ddmat GL_dn = gs(OMdn, FM_T_up);
+	ddmat FM_T_dagg = FM_T.adjoint();
+	ddmat GR_up = gs(OMup, FM_T_dagg);
+	ddmat GR_dn = gs(OMdn, FM_T_dagg);
+	ddmat GL_up_even = gs(OMup, FM_T);
+	ddmat GL_dn_even = gs(OMdn, FM_T);
+	ddmat GL_up_odd = GL_up_even;
+	ddmat GL_dn_odd = GL_dn_even;
+	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
+	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
+	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
+	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
+	//this means 2 layers are on before we begin!
+	GL_up_even = (OM - NM -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
+	GL_dn_even = (OM - NM -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
+	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
+	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
+	GL_up_odd = (OM - odd_l1_up -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
+	GL_dn_odd = (OM - odd_l1_dn -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
+	GL_up_odd = (OM - NM -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
+	GL_dn_odd = (OM - NM -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
 
-	dddmat GR, GL, GR_dagg;
+	dddmat GR, GL_even, GL_odd, GR_dagg;
 	GR.fill(0.);
-	GL.fill(0.);
+	GL_even.fill(0.);
+	GL_odd.fill(0.);
 	GR.topLeftCorner(18,18) = GR_up;
 	GR.bottomLeftCorner(18,18) = GR_dn;
 	GR = S.inverse()*GR*S;
-	GR_dagg = GR.adjoint();
-
-	ddmat tg_ut, tg_dt;
 
 	dddmat Ibig = dddmat::Identity();
-	ddmat OM = E*I;
+	dddmat Tmean, Tmeandagg;
+	Tmean.fill(0.);
+	Tmean.topLeftCorner(18,18) = FM_NM_T;
+	Tmean.bottomRightCorner(18,18) = FM_NM_T;
+	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;
+	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;
+	dddmat OMbig = E*Ibig;
+	dddmat NMbig;
+	NMbig.fill(0.);
+	NMbig.topLeftCorner(18,18) = NM;
+	NMbig.bottomRightCorner(18,18) = NM;
+	//adlayer one bilayer onto RHS G to ensure gmean is correct
+	//this means 2 layers are on before we begin!
+	GR = (OMbig - NMbig -Tmean*GR*Tmeandagg).inverse();
+	GR_dagg = GR.adjoint();
 
 	dddmat Pauli;//This is the y Pauli sigma Matrix
 	Pauli.fill(0.);
 	Pauli.topRightCorner(18,18) = -i*I;
 	Pauli.bottomLeftCorner(18,18) = i*I;
 
-	double spincurrent;
-	dddmat A,B,TOT;
+	double spincurrent_even, spincurrent_odd;
+	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
 	dddmat T, Tdagg;
 	T.fill(0.);
 	T.topLeftCorner(18,18) = NM_T;
 	T.bottomRightCorner(18,18) = NM_T;
 	Tdagg = T.adjoint();
+	//TODO at the moment, this is only accurate from N = 4...
+	//because of gmean behaviour. See questions.txt
 //lim is thickness of layer 2
 	/* const int lim = 1; */
 /* //build thickness of layer 2 to lim layers */
@@ -225,45 +266,35 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 //adlayer layer 2 from layer 1 to spacer thickness, N
 	vector<double> result;
 	result.reserve(N);
-	/* if (myswitch == 1) */
-	/* 	cout<<GR<<endl<<endl<<GL<<endl<<endl; */
-	Matrix2cd tmp1, tmp2;
-	for (int it=0; it < N; ++it){
-		/* tmp1 = GL*T; */
-		/* tmp2 = T_dagg*tmp1; */
-		/* tmp1 = GR*tmp2; */
-		/* tmp2 = I - tmp1; */
-		/* A = tmp2.inverse(); */
-		GL.topLeftCorner(18,18) = GL_up;
-		GL.bottomRightCorner(18,18) = GL_dn;
-		A = (Ibig-GR*Tdagg*GL*T).inverse();
-		/* tmp2 = GL.adjoint(); */
-		/* tmp1 = tmp2*T; */
-		/* tmp2 = T_dagg*tmp1; */
-		/* tmp1 = GR_dagg*tmp2; */
-		/* tmp2 = I - tmp1; */
-		/* B = tmp2.inverse(); */
-		B = (Ibig-GR_dagg*Tdagg*GL.adjoint()*T).inverse();
-		/* B = (I-T_dagg*GL*T*GR).inverse(); */
+	for (int it=0; it < N/2; ++it){
+		GL_even.topLeftCorner(18,18) = GL_up_even;
+		GL_even.bottomRightCorner(18,18) = GL_dn_even;
+		GL_odd.topLeftCorner(18,18) = GL_up_odd;
+		GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
+		A_even = (Ibig-GR*Tdagg*GL_even*T).inverse();
+		B_even = (Ibig-GR_dagg*Tdagg*GL_even.adjoint()*T).inverse();
+		A_odd = (Ibig-GR*Tdagg*GL_odd*T).inverse();
+		B_odd = (Ibig-GR_dagg*Tdagg*GL_odd.adjoint()*T).inverse();
 		if (myswitch == 0){
-			TOT = (GL*T*A*B*GR_dagg*Tdagg-A*B+0.5*(A+B))*Pauli;
-			spincurrent = (1./(2.*M_PI))*real(TOT.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
+			TOT_even = (GL_even*T*A_even*B_even*GR_dagg*Tdagg-A_even*B_even+0.5*(A_even+B_even))*Pauli;
+			TOT_odd = (GL_odd*T*A_odd*B_odd*GR_dagg*Tdagg-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
+			spincurrent_even = (1./(2.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
+			spincurrent_odd = (1./(2.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
 		}
 		if (myswitch == 1){
-			TOT = (B.adjoint()-A)*Pauli;
-			spincurrent = .5*imag(TOT.trace());
+			TOT_even = (B_even.adjoint()-A_even)*Pauli;
+			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
+			spincurrent_even = .5*imag(TOT_even.trace());
+			spincurrent_odd = .5*imag(TOT_odd.trace());
 		}
-		result.emplace_back(spincurrent);
-		GL_up = (OM - NM -NM_T_dagg*GL_up*NM_T).inverse();
-		GL_dn = (OM - NM -NM_T_dagg*GL_dn*NM_T).inverse();
-		/* cout<<"N = "<<it<<endl; */
-		/* cout<<"LHS SGF"<<endl; */
-		/* cout<<GL<<endl; */
+		result.emplace_back(spincurrent_even);
+		result.emplace_back(spincurrent_odd);
+		GL_up_even = (OM - NM -NM_T_dagg*GL_up_even*NM_T).inverse();
+		GL_dn_even = (OM - NM -NM_T_dagg*GL_dn_even*NM_T).inverse();
+		GL_up_odd = (OM - NM -NM_T_dagg*GL_up_odd*NM_T).inverse();
+		GL_dn_odd = (OM - NM -NM_T_dagg*GL_dn_odd*NM_T).inverse();
 	}
-	/* for (int ii = 0; ii < N; ii++) */
-	/* 	result_tot[ii] = result1[ii] + result2[ii]; */
 	return result;
-	/* return result_tot; */
 }
 
 vector<double> int_theta(const double x, const double z, const double a, const dcomp E,
@@ -348,7 +379,12 @@ vector<double> switching(const double x, const double z, const double a, const d
 	result1.reserve(N);
 	double V = 0.0;
 	/* double V = 0.3; */
-	result1 = int_energy(x, z, a, Ef, N, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+	if (abs(V) > 1e-4)
+		result1 = int_energy(x, z, a, Ef, N, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+	else {
+		for (int l = 0; l < N; l++)
+			result1[l] = 0.;
+	}
 	integrate.reserve(N);
 	result2.reserve(N);
 	for (int l = 0; l < N; l++)
@@ -589,7 +625,7 @@ int main()
 	/* cout<<UU.real()<<endl<<endl; */
 
 	// number of spacer layers
-	int N = 11;
+	int N = 10;
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
@@ -597,8 +633,9 @@ int main()
 	/* answer = int_energy(0, 0, 1, Ef, N); */
 	/* answer = int_kpoints(1, Ef, N); */
 	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */
-	for (int i = 1; i < N; i++){
-		Myfile<<scientific<<i<<" "<<answer[i]<<endl;
+	//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
+	for (int i = 0; i < N; i++){
+		Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
 	}
 	return 0;
 }
