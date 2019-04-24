@@ -191,15 +191,19 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
 //lim is thickness of layer 2
 	const int lim = 1;
+	ddmat ins;
+	M9 Ismall = M9::Identity();
+	ins.fill(0.);
+	ins.bottomRightCorner(9,9) = 5.*Ismall;
 //build thickness of layer 2 to lim layers
-//add one bilayer of artificial insulater TODO
+//add one layer of artificial insulater (first layer is NM) TODO
 	for (int it=0; it < lim; ++it){
 		/* if (lim > 1) */
 		/* 	ins = ins - I*(V*it/(lim*1.-1)); */
 		//TODO in one band model this was one layer.. figure out how to do drop properly in bilayer
 		//TODO perhaps V isn't being treated correctly throughout this section
-		GL_up_even = (OM - (NM + 5.*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM + 5.*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
+		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
+		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
 	}
 //lim2 is thickness of layer 3
 	const int lim2 = 5;
@@ -266,6 +270,7 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	dddmat GR_T_dagg, GR_dagg_T_dagg;
 	GR_T_dagg = GR*Tdagg;
 	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	dddmat tmp1, tmp2;
 	//TODO at the moment, this is only accurate from N = 4...
 	//because of gmean behaviour. See questions.txt
 //adlayer layer 2 from layer 1 to spacer thickness, N
@@ -281,8 +286,16 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
 		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
 		if (myswitch == 0){
-			TOT_even = (GL_even*T*A_even*B_even*GR_dagg_T_dagg-A_even*B_even+0.5*(A_even+B_even))*Pauli;
-			TOT_odd = (GL_odd*T*A_odd*B_odd*GR_dagg_T_dagg-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
+			tmp1 = B_even*GR_dagg_T_dagg;
+			tmp2 = A_even*tmp1;
+			tmp1 = T*tmp2;
+			tmp2 = GL_even*tmp1;
+			TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
+			tmp1 = B_odd*GR_dagg_T_dagg;
+			tmp2 = A_odd*tmp1;
+			tmp1 = T*tmp2;
+			tmp2 = GL_odd*tmp1;
+			TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
 			spincurrent_even = (1./(2.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
 			spincurrent_odd = (1./(2.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
 		}
@@ -342,8 +355,8 @@ vector<double> int_energy(const double x, const double z, const double a, const 
 	dcomp im = -1;
 	im = sqrt(im);
 	//TODO integration doesn't seem as expectec... seem to require end > than present
-	double end = 0.1;
-	double start = -0.4;
+	double end = Ef + 0.1;
+	double start = Ef - V - 0.1;
 
 	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000); */
 	/* double error, ans; */
