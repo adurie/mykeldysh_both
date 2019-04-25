@@ -184,11 +184,15 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	ddmat FM_T_dagg = FM_T.adjoint();
 	ddmat GR_up = gs(OMup, FM_T_dagg);
 	ddmat GR_dn = gs(OMdn, FM_T_dagg);
+	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
+	
+	/* //this for trilayer */
 	/* ddmat GL_up_even = gs(OMup, FM_T); */
 	/* ddmat GL_dn_even = gs(OMdn, FM_T); */
+
+	//this below block for 5 layer
 	ddmat GL_up_even = gs(OM - NM, NM_T);
 	ddmat GL_dn_even = GL_up_even;
-	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
 //lim is thickness of layer 2
 	const int lim = 1;
 	ddmat ins;
@@ -215,6 +219,7 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
 		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
 	}
+
 	ddmat GL_up_odd = GL_up_even;
 	ddmat GL_dn_odd = GL_dn_even;
 	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
@@ -235,7 +240,7 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	GL_even.fill(0.);
 	GL_odd.fill(0.);
 	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomLeftCorner(18,18) = GR_dn;
+	GR.bottomRightCorner(18,18) = GR_dn;
 	GR = S.inverse()*GR*S;
 
 	dddmat Ibig = dddmat::Identity();
@@ -354,7 +359,7 @@ vector<double> int_energy(const double x, const double z, const double a, const 
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
-	//TODO integration doesn't seem as expectec... seem to require end > than present
+	//TODO integration doesn't seem as expected... seem to require end > than present
 	double end = Ef + 0.1;
 	double start = Ef - V - 0.1;
 
@@ -396,8 +401,8 @@ vector<double> switching(const double x, const double z, const double a, const d
 		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
 	vector<double> result1, result2, integrate;
 	result1.reserve(N);
-	/* double V = 0.0; */
-	double V = 0.3;
+	double V = 0.0;
+	/* double V = 0.3; */
 	if (abs(V) > 1e-4)
 		result1 = int_energy(x, z, a, Ef, N, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
 	else {
@@ -484,7 +489,7 @@ int main()
 	// plot output of spincurrent against energy
 	string Mydata;
 	ofstream Myfile;	
-	/* Mydata = "AB.txt"; */
+	/* Mydata = "SC_fixed_k_no_V.txt"; */
 	Mydata = "SC_fixed_k.txt";
 	/* Mydata = "sc.txt"; */
 	Myfile.open( Mydata.c_str(),ios::trunc );
