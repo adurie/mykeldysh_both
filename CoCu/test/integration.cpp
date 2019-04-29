@@ -1,6 +1,5 @@
 #include <iostream>
 #include <cmath>
-/* #include <gsl/gsl_integration.h> */
 #include "vector_integration.h"
 #include <vector>
 
@@ -20,21 +19,27 @@ double f(double x, vector<double> &vec_result, void * params){
 }
 
 int main(){
-	gsl_integration_workspace * w = gsl_integration_workspace_alloc(2000);
+	gsl_integration_workspace * w = gsl_integration_workspace_alloc(1000);
 	double result, error;
 	double expected = -4.;
 	double alpha = 1.;
 	vector<double> vec_result;
 	int n = 10; //number of dependent variables to integrate over
+	//must initialise vec_result this way
 	vec_result.reserve(n);
 	for (int k = 0; k < n; k++)
-		vec_result.push_back(0.);
+		vec_result.emplace_back(0.);
 
 	my_gsl_function F;
 	F.function = &f;
 	F.params = &alpha;
+	double start = 0.;
+	double end = 1.;
+	double tol = 1e-7;
+	int max_it = 1000;
+	int key = 1;// key is always one with the way vector_integration.h is set up
 
-	gsl_integration_qag(&F, 0, 1, 0, 1e-7, 1000, 1, w, vec_result, &result, &error);
+	gsl_integration_qag(&F, start, end, 0, tol, max_it, key, w, vec_result, &result, &error);
 
 	cout<<"estimated error = "<<error<<endl;
 	cout<<"result from qag = "<<result<<endl;

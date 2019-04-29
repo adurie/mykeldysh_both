@@ -6,7 +6,7 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/src/Core/util/MKL_support.h>
-/* #include "vector_integration.h" */
+#include "vector_integration.h"
 #include <vector>
 #include "CoCuCo.h"
 #define EIGEN_USE_MKL_ALL
@@ -21,6 +21,24 @@ typedef vector<Vector3d, aligned_allocator<Vector3d>> vec3;
 typedef vector<Matrix<dcomp, 9, 9>, aligned_allocator<Matrix<dcomp, 9, 9>>> vM;
 typedef Matrix<dcomp, 18, 18> ddmat;
 typedef Matrix<dcomp, 36, 36> dddmat;
+
+typedef struct
+	{
+		int N;
+		double Ef;
+		double x;
+		double z;
+		double V;
+		vec3 *basis;
+		vec3 *pos;
+		Vector3d *t;
+		vM *cobalt_up;
+		vM *cobalt_dn;
+	        vM *copper;
+	       	vM *cob_cop_up; 
+		vM *cob_cop_dn;
+	}
+variables;
 
 //calculates g at the interfaces
 ddmat gs(const ddmat &OM, const ddmat &T)
@@ -74,12 +92,24 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	return result;
 }
 
-vector<double> f(const double x, const double z, const double a, const dcomp E, const double Ef, const int N,
-	       	const double theta, const int myswitch, const double V,	const Vector3d &t, const vec3 &pos, const vec3 &basis, 
-		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
+vector<double> f(const double theta, const dcomp E, variables * send, const int myswitch) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
+	double x = send->x;
+	double z = send->z;
+	double V = send->V;
+	int N = send->N;
+	vec3 basis = *send->basis;
+	double Ef = send->Ef;
+	vec3 pos = *send->pos;
+	Vector3d t = *send->t;
+	vM cobalt_up = *send->cobalt_up;
+	vM cobalt_dn = *send->cobalt_dn;
+        vM copper = *send->copper;
+       	vM cob_cop_up = *send->cob_cop_up; 
+	vM cob_cop_dn = *send->cob_cop_dn;
+	/* cout<<"x = "<<x<<" z = "<<z<<" V = "<<V<<" N = "<<N<<" Ef = "<<Ef<<endl; */
 
 	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, 
 	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21,
@@ -321,11 +351,10 @@ vector<double> f(const double x, const double z, const double a, const dcomp E, 
 	return result;
 }
 
-vector<double> int_theta(const double x, const double z, const double a, const dcomp E,
-	       	const double Ef, const int N, const int myswitch, const double V, const Vector3d &t, const vec3 &pos, const vec3 &basis, 
-		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
+vector<double> int_theta(const dcomp E, variables * send, const int myswitch) {
 	vector<double> result;
 	vector<double> integrate;
+	int N = send->N;
 	result.reserve(N);
 	integrate.reserve(N);
 	for (int i = 0; i < N; i++)
@@ -336,7 +365,7 @@ vector<double> int_theta(const double x, const double z, const double a, const d
 	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(x, z, a, E, Ef, N, theta, myswitch, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+		integrate = f(theta, E, send, myswitch);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += M_PI*(0.5/n)*integrate[i];
@@ -347,57 +376,69 @@ vector<double> int_theta(const double x, const double z, const double a, const d
 	return result;
 }
 
-vector<double> int_energy(const double x, const double z, const double a, const double Ef, const int N, const double V, const Vector3d &t, 
-		const vec3 &pos, const vec3 &basis, const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
-	vector<double> result;
-	result.reserve(N);
-	for (int i = 0; i < N; i++)
-		result[i] = 0.;
-
-	double end = Ef + 0.1;
-	double start = Ef - V - 0.1;
-
-	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000); */
-	/* my_gsl_function F; */
-	/* F.function = &pass; */
-	/* F.params = ; */
-	/* double tol = 1e-2; */
-	/* int max_it = 1000; */
-	/* double dresult, error; */
-	/* gsl_integration_qag(&F, start, end, 0, tol, max_it, key, w, &result, &dresult, &error); */
-	/* gsl_integration_workspace_free (w); */
-
-	double E;
+double pass(double E, vector<double> &result, void * params) {
+	variables * send = (variables *) params;
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
-	vector<double> integrate;
-	integrate.reserve(N);
-	const int n = 1000;
-	double factor = (end - start)/(n*1.);
-	for (int k=0; k<n+1; k++) {
-		E = start + k*(end-start)/(n*1.);
-		E_send = E + 1e-6*im;
-		integrate = int_theta(x, z, a, E_send, Ef, N, 0, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
-		for (int i = 0; i < N; i++){
-			if ((k==0)||(k==n))
-				result[i] += 0.5*factor*integrate[i];
-			else 
-				result[i] += factor*integrate[i];
-		}
-	}	
+	E_send = E + 1e-6*im;
+	result =  int_theta(E_send, send, 0);
+	double dresult = 0.;
+	for (int k = 0; k < send->N; k++)
+		dresult += result[k];
+	return dresult;
+}
+
+vector<double> int_energy(variables * send) {
+	vector<double> result;
+	int N = send->N;
+	double Ef = send->Ef;
+
+	result.reserve(N);
+	for (int i = 0; i < N; i++)
+		result.emplace_back(0.);
+
+	double end = Ef + 0.1;
+	double start = Ef - send->V - 0.1;
+	double dresult;
+
+	gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000);
+	my_gsl_function F;
+	F.function = &pass;
+	F.params = send;
+	double tol = 1e-4;
+	int max_it = 1000;
+	double error;
+	int key = 1;
+	gsl_integration_qag(&F, start, end, tol, 0, max_it, key, w, result, &dresult, &error);
+	gsl_integration_workspace_free (w);
+
+	/* double E; */
+	/* vector<double> integrate; */
+	/* integrate.reserve(N); */
+	/* const int n = 1000; */
+	/* double factor = (end - start)/(n*1.); */
+	/* for (int k=0; k<n+1; k++) { */
+	/* 	E = start + k*(end-start)/(n*1.); */
+	/* 	dresult = pass(E, integrate, send); */
+	/* 	for (int i = 0; i < N; i++){ */
+	/* 		if ((k==0)||(k==n)) */
+	/* 			result[i] += 0.5*factor*integrate[i]; */
+	/* 		else */ 
+	/* 			result[i] += factor*integrate[i]; */
+	/* 	} */
+	/* } */	
 
 	return result;
 }
 
-vector<double> switching(const double x, const double z, const double a, const double Ef, const int N, const Vector3d &t, const vec3 &pos, const vec3 &basis, 
-		const vM &copper, const vM &cobalt_up, const vM &cobalt_dn, const vM &cob_cop_up, const vM &cob_cop_dn) {
+vector<double> switching(variables * send) {
 	vector<double> result1, result2, integrate;
+	int N = send->N;
+	double V = send->V;
 	result1.reserve(N);
-	/* double V = 0.0; */
-	double V = 0.3;
 	if (abs(V) > 1e-4)
-		result1 = int_energy(x, z, a, Ef, N, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+		result1 = int_energy(send);
 	else {
 		for (int l = 0; l < N; l++)
 			result1[l] = 0.;
@@ -414,8 +455,8 @@ vector<double> switching(const double x, const double z, const double a, const d
 	const double T = 300;// need to reconcile...
 	double kT = k*T;
 	for (int j=0; j!=15; j++){
-		E = Ef + (2.*j + 1.)*kT*M_PI*i;
-		integrate = int_theta(x, z, a, E, Ef, N, 1, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
+		integrate = int_theta(E, send, 1);
 		if (abs(V) < 1e-5){
 			for (int l = 0; l < N; l++)
 				result2[l] += 2.*kT*integrate[l]; 
@@ -423,8 +464,8 @@ vector<double> switching(const double x, const double z, const double a, const d
 		else {
 			for (int l = 0; l < N; l++)
 				result2[l] += kT*integrate[l]; 
-			E = Ef - V + (2.*j + 1.)*kT*M_PI*i;
-			integrate = int_theta(x, z, a, E, Ef, N, 1, V, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i;
+			integrate = int_theta(E, send, 1);
 			for (int l = 0; l < N; l++)
 				result2[l] += kT*integrate[l]; 
 		}
@@ -648,10 +689,30 @@ int main()
 
 	// number of spacer layers
 	int N = 30;
+	// set bias
+	/* double V = 0.0; */
+	double V = 0.3;
+
+	//set up the variables to send
+	variables send;
+	send.N = N;
+	send.Ef = Ef;
+	send.x = 0.; //for now!
+	send.z = 0.; //for now!
+	send.t = &t;
+	send.pos = &pos;
+	send.basis = &basis;
+	send.copper = &copper;
+	send.cobalt_up = &cobalt_up;
+	send.cobalt_dn = &cobalt_dn;
+	send.cob_cop_up = &cob_cop_up;
+	send.cob_cop_dn = &cob_cop_dn;
+	send.V = V;
+
 	vector<double> answer;
 	answer.reserve(N);
 	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
-	answer = switching(0, 0, 1, Ef, N, t, pos, basis, copper, cobalt_up, cobalt_dn, cob_cop_up, cob_cop_dn);
+	answer = switching(&send);
 	/* answer = int_energy(0, 0, 1, Ef, N); */
 	/* answer = int_kpoints(1, Ef, N); */
 	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */
