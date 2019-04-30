@@ -6,9 +6,12 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/src/Core/util/MKL_support.h>
-#include "vector_integration.h"
+/* #include "vector_integration.h" */
 #include <vector>
 #include "CoCuCo.h"
+#include <ctime>
+#include "/home/alex/INTEL/impi/2019.1.144/intel64/include/mpi.h"
+#define EIGEN_DONT_PARALLELIZE
 #define EIGEN_USE_MKL_ALL
 // important note - presently the code assumes fcc only - integration
 // in addition it is assumed SK for neighbour terms are the same for each spin
@@ -477,58 +480,15 @@ vector<double> switching(variables * send) {
 	return total;
 }
 
-vector<double> int_kpoints(const double a, const double Ef, const int N){
-	vector<double> result;
-	vector<double> integrate;
-	result.reserve(N);
-	integrate.reserve(N);
-	double x, z;
-	for (int i = 0; i < N; i++)
-		result[i] = 0.;
-
-	int n = 20;
-	int counter = 0;
-	double factor = 8./(n*n);
-	for (int k = 0; k!=n+1; k++){
-		if (k%2!=0){
-			x = M_PI*k/n;
-			for (int l = 0; l!=k+1; l++){
-				if (l%2!=0){
-					counter++;
-					z = M_PI*l/n;
-					/* integrate = int_theta(x, z, 1, Ef, Ef, N); */
-					/* integrate = int_energy(x, z, 1, Ef, N); */
-					/* integrate = switching(x, z, 1, Ef, N); */
-					for (int i = 0; i < N; i++){
-						if ((k==1) && (l==1))
-							result[i] += factor*0.5*integrate[i];
-						else if (k==l)
-							result[i] += factor*0.5*integrate[i];
-						else
-							result[i] += factor*integrate[i];
-					}
-					if (counter%4000 == 0)
-						cout<<"     "<<counter*800./(n*n*1. + n)<<"% completed"<<endl;
-				}
-			}
-		}
-	}
-	cout<<"     100% completed"<<endl;
-	return result;
-}
-
 int main() 
 {
 	//number of atomic planes
 	// plot output of spincurrent against energy
 	string Mydata;
 	ofstream Myfile;	
-	/* Mydata = "SC_fixed_k_no_V.txt"; */
-	Mydata = "SC_fixed_k.txt";
-	/* Mydata = "sc.txt"; */
+	Mydata = "mpi_SC.txt";
 	Myfile.open( Mydata.c_str(),ios::trunc );
 	const double Ef = 0.57553;
-	/* const double Ef = -0.3; */
 
 	//This block creates the SK tight binding Hamiltonians for onsite, first 
 	//and second neighbours for Co and Cu in fcc
@@ -675,18 +635,6 @@ int main()
 		cob_cop_dn.emplace_back(tmp_mat);
 	}
 
-	/* M9 U, U12, U21; */
-	/* U = InPlaneH(pos, basis[0], copper, 0.8, 2.2); */
-	/* U12 = InPlaneH(pos, basis[1], copper, 0.8, 2.2); */
-	/* U21 = InPlaneH(pos, -basis[1], copper, 0.8, 2.2); */
-	/* ddmat UU; */
-	/* UU.topLeftCorner(9,9) = U; */
-	/* UU.topRightCorner(9,9) = U12; */
-	/* UU.bottomLeftCorner(9,9) = U21; */
-	/* UU.bottomRightCorner(9,9) = U; */
-	/* /1* cout<<UU.real()<<endl<<endl; *1/ */
-	/* cout<<UU.real()<<endl<<endl; */
-
 	// number of spacer layers
 	int N = 30;
 	// set bias
@@ -711,14 +659,60 @@ int main()
 
 	vector<double> answer;
 	answer.reserve(N);
-	/* answer = int_theta(0, 0, 1,  0.1, Ef, N); */
-	answer = switching(&send);
-	/* answer = int_energy(0, 0, 1, Ef, N); */
-	/* answer = int_kpoints(1, Ef, N); */
-	/* answer = f(0, 0, 1, Ef, Ef, i, 0); */
-	//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
-	for (int i = 0; i < N; i++){
-		Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
+	/* answer = switching(&send); */
+
+	vector<double> result;
+	vector<double> integrate;
+	result.reserve(N);
+	integrate.reserve(N);
+	for (int i = 0; i < N; i++)
+		result[i] = 0.;
+	int n = 350;//set the number of k-points along x axis
+	/* int n = 2;//set the number of k-points along x axis */
+	int counter = 0;
+	double factor = 2./(n*n);
+	int sumk = n*(n + 1)/2;
+	int p, q;
+	int product1;
+	int myid, numprocs;
+	time_t timer;
+	int k, l, i;
+	int start_time = time(&timer);
+	MPI_Init(NULL,NULL);
+	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+	for (k = 2*myid + 1; k<2*sumk; k+=2*numprocs){
+		for (l = 0; l < n; l++){
+			product1 = (2*n - l)*(l + 1);
+			if ( k < product1){
+				p = 2*(k/(2*n - l)) + 1;
+				q = (l*(l + 1) + k)%(2*n);
+				break;
+			}
+		}
+		send.x = M_PI*p/(2*n);
+		send.z = M_PI*q/(2*n);
+		integrate = switching(&send);
+		for (i = 0; i < N; i++){
+			if ((p==1) && (q==1))
+				result[i] += factor*0.5*integrate[i];
+			else if (p==q)
+				result[i] += factor*0.5*integrate[i];
+			else
+				result[i] += factor*integrate[i];
+		}
+		counter++;
 	}
+	cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl;
+	cout<<"process "<<myid<<" performed "<<counter<<" computations"<<endl;
+	for (i = 0; i < N; i++)
+		MPI_Reduce(&result[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	if (myid == 0){
+		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
+		for (int i = 0; i < N; i++)
+			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
+	}
+	MPI_Finalize();
+
 	return 0;
 }
