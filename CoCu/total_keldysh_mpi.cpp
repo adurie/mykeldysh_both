@@ -32,6 +32,7 @@ typedef struct
 		double x;
 		double z;
 		double V;
+		double kT;
 		vec3 *basis;
 		vec3 *pos;
 		Vector3d *t;
@@ -64,10 +65,7 @@ ddmat gs(const ddmat &OM, const ddmat &T)
 	return GR;
 }
 
-dcomp fermi(const dcomp arg, const double Ef){
-	const double k = 8.617e-5/13.6058;
-	const double T = 300;
-	double kT = k*T;
+dcomp fermi(const dcomp arg, const double Ef, const double kT){
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
@@ -103,6 +101,7 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	double z = send->z;
 	double V = send->V;
 	int N = send->N;
+	double kT = send->kT;
 	vec3 basis = *send->basis;
 	double Ef = send->Ef;
 	vec3 pos = *send->pos;
@@ -220,39 +219,40 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	ddmat GR_dn = gs(OMdn, FM_T_dagg);
 	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
 	
-	/* //this for trilayer */
-	/* ddmat GL_up_even = gs(OMup, FM_T); */
-	/* ddmat GL_dn_even = gs(OMdn, FM_T); */
+	//this for trilayer
+	ddmat GL_up_even = gs(OMup, FM_T);
+	ddmat GL_dn_even = gs(OMdn, FM_T);
 
-	//this below block for 5 layer
-	ddmat GL_up_even = gs(OM - NM, NM_T);
-	ddmat GL_dn_even = GL_up_even;
-//lim is thickness of layer 2
-	const int lim = 1;
-	ddmat ins;
-	M9 Ismall = M9::Identity();
-	ins.fill(0.);
-	ins.bottomRightCorner(9,9) = 5.*Ismall;
-//build thickness of layer 2 to lim layers
-//add one layer of artificial insulater (first layer is NM) TODO
-	for (int it=0; it < lim; ++it){
-		/* if (lim > 1) */
-		/* 	ins = ins - I*(V*it/(lim*1.-1)); */
-		//TODO in one band model this was one layer.. figure out how to do drop properly in bilayer
-		//TODO perhaps V isn't being treated correctly throughout this section
-		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-	}
-//lim2 is thickness of layer 3
-	const int lim2 = 5;
-//build thickness of layer 3 to lim2 layers
-//add 5 bilayers i.e. 10 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
-	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
-	}
+	/* //this below block for 5 layer */
+	/* ddmat GL_up_even = gs(OM - NM, NM_T); */
+	/* ddmat GL_dn_even = GL_up_even; */
+/* //lim is thickness of layer 2 */
+	/* const int lim = 10; */
+	/* ddmat ins; */
+	/* M9 Ismall = M9::Identity(); */
+	/* ins.fill(0.); */
+	/* ins.topLeftCorner(9,9) = 500.*Ismall; */
+	/* ins.bottomRightCorner(9,9) = 500.*Ismall; */
+/* //build thickness of layer 2 to lim layers */
+/* //add ten bilayers of artificial insulater */ 
+	/* for (int it=0; it < lim; ++it){ */
+	/* 	if (lim > 1){ */
+	/* 		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1)); */
+	/* 		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1)); */
+	/* 	} */
+	/* 	GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse(); */
+	/* 	GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse(); */
+	/* } */
+/* //lim2 is thickness of layer 3 */
+	/* const int lim2 = 10; */
+/* //build thickness of layer 3 to lim2 layers */
+/* //add 10 bilayers i.e. 20 layers of FM */
+	/* GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse(); */
+	/* GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse(); */
+	/* for (int it=0; it < lim2 - 1; ++it){ */
+	/* 	GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse(); */
+	/* 	GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse(); */
+	/* } */
 
 	ddmat GL_up_odd = GL_up_even;
 	ddmat GL_dn_odd = GL_dn_even;
@@ -335,14 +335,14 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 			tmp1 = T*tmp2;
 			tmp2 = GL_odd*tmp1;
 			TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
-			spincurrent_even = (1./(2.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
-			spincurrent_odd = (1./(2.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef)-fermi(E,Ef-V)));
+			spincurrent_even = (-1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+			spincurrent_odd = (-1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
 		}
 		if (myswitch == 1){
 			TOT_even = (B_even.adjoint()-A_even)*Pauli;
 			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
-			spincurrent_even = .5*imag(TOT_even.trace());
-			spincurrent_odd = .5*imag(TOT_odd.trace());
+			spincurrent_even = -.25*imag(TOT_even.trace());
+			spincurrent_odd = -.25*imag(TOT_odd.trace());
 		}
 		result.emplace_back(spincurrent_even);
 		result.emplace_back(spincurrent_odd);
@@ -412,14 +412,14 @@ vector<double> int_energy(variables * send) {
 	/* double tol = 1e-4; */
 	/* int max_it = 1000; */
 	/* double error; */
-	/* int key = 1; */
+	/* int key = 6; */
 	/* gsl_integration_qag(&F, start, end, tol, 0, max_it, key, w, result, &dresult, &error); */
 	/* gsl_integration_workspace_free (w); */
 
 	double E;
 	vector<double> integrate;
 	integrate.reserve(N);
-	const int n = 1000;
+	const int n = 2000;
 	double factor = (end - start)/(n*1.);
 	for (int k=0; k<n+1; k++) {
 		E = start + k*(end-start)/(n*1.);
@@ -454,9 +454,7 @@ vector<double> switching(variables * send) {
 	i = -1.;
 	i = sqrt(i);
 	dcomp E = 0.;
-	const double k = 8.617e-5/13.6058;//TODO this exist above as well..
-	const double T = 300;// need to reconcile...
-	double kT = k*T;
+	double kT = send->kT;
 	for (int j=0; j!=15; j++){
 		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
 		integrate = int_theta(E, send, 1);
@@ -484,10 +482,6 @@ int main()
 {
 	//number of atomic planes
 	// plot output of spincurrent against energy
-	string Mydata;
-	ofstream Myfile;	
-	Mydata = "mpi_SC.txt";
-	Myfile.open( Mydata.c_str(),ios::trunc );
 	const double Ef = 0.57553;
 
 	//This block creates the SK tight binding Hamiltonians for onsite, first 
@@ -519,8 +513,16 @@ int main()
 	t << 0., 1., 0.;
 	basis.emplace_back(bas1);
 	basis.emplace_back(bas2);
+	//This section defines the primitive lattice vectors
+	Vector3d lat1, lat2, lat3;
+	lat1 = bas2;
+	lat2 << 0, 0.5, 0.5;
+	lat3 << 0.5, 0, 0.5;
+	//Distance information for n.n and n.n.n
+	double nn_dist, nnn_dist;
+	nn_dist = M_SQRT2/2.;
+	nnn_dist = 1.;
 	//This section generates the Hamiltonians from SK parameters and NN positions
-	double xx, yy;
 	double x, y, z;
 	Vector3d X, Y, Z;
 	X << 1, 0, 0;
@@ -531,122 +533,81 @@ int main()
 	pos.reserve(19);
 	cobalt_up.reserve(19); cobalt_dn.reserve(19); copper.reserve(19); cob_cop_up.reserve(19);
 	cob_cop_dn.reserve(19);
-	tmp_vec << 0., 0., 0.;
-	pos.emplace_back(tmp_vec);
-	cobalt_up.emplace_back(Co_u);
-	cobalt_dn.emplace_back(Co_d);
-	copper.emplace_back(Cu);
-	cob_cop_up.emplace_back(Cu); // In theory this will not be used
-	cob_cop_dn.emplace_back(Cu); // In theory this will not be used
 	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
 	Matrix<dcomp, 9, 9> tmp_mat;
-	//This for 1st neighbours
-	for (int k = -1; k < 2; k += 2){//TODO this needs to be automated - use lattice vectors
-		for (int l = -1; l < 2; l += 2){
-			xx = 0.5*k;
-			yy = 0.5*l;
-			tmp_vec << xx, yy, 0;
-			pos.emplace_back(tmp_vec);
-			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			tmp_mat = eint1(Co1, x, y, z);
-			cobalt_up.emplace_back(tmp_mat);
-			cobalt_dn.emplace_back(tmp_mat);
-			tmp_mat = eint1(Cu1, x, y, z);
-			copper.emplace_back(tmp_mat);
-			tmp_mat = eint1(CoCu1, x, y, z);
-			cob_cop_up.emplace_back(tmp_mat);
-			cob_cop_dn.emplace_back(tmp_mat);
-
-			tmp_vec << 0, xx, yy;
-			pos.emplace_back(tmp_vec);
-			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			tmp_mat = eint1(Co1, x, y, z);
-			cobalt_up.emplace_back(tmp_mat);
-			cobalt_dn.emplace_back(tmp_mat);
-			tmp_mat = eint1(Cu1, x, y, z);
-			copper.emplace_back(tmp_mat);
-			tmp_mat = eint1(CoCu1, x, y, z);
-			cob_cop_up.emplace_back(tmp_mat);
-			cob_cop_dn.emplace_back(tmp_mat);
-
-			tmp_vec << xx, 0, yy;
-			pos.emplace_back(tmp_vec);
-			x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-			tmp_mat = eint1(Co1, x, y, z);
-			cobalt_up.emplace_back(tmp_mat);
-			cobalt_dn.emplace_back(tmp_mat);
-			tmp_mat = eint1(Cu1, x, y, z);
-			copper.emplace_back(tmp_mat);
-			tmp_mat = eint1(CoCu1, x, y, z);
-			cob_cop_up.emplace_back(tmp_mat);
-			cob_cop_dn.emplace_back(tmp_mat);
+	double distance;
+	for (int i1 = -1; i1 < 2; i1++){
+		for (int i2 = -1; i2 < 2; i2++){
+			for (int i3 = -1; i3 < 2; i3++){
+				tmp_vec = i1*lat1 + i2*lat2 + i3*lat3;
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					pos.emplace_back(tmp_vec);
+					cobalt_up.emplace_back(Co_u);
+					cobalt_dn.emplace_back(Co_d);
+					copper.emplace_back(Cu);
+					cob_cop_up.emplace_back(Cu); // In theory this will not be used
+					cob_cop_dn.emplace_back(Cu); // In theory this will not be used
+				}
+				else if (distance < nn_dist + 1e-3){
+					pos.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Co1, x, y, z);
+					cobalt_up.emplace_back(tmp_mat);
+					cobalt_dn.emplace_back(tmp_mat);
+					tmp_mat = eint1(Cu1, x, y, z);
+					copper.emplace_back(tmp_mat);
+					tmp_mat = eint1(CoCu1, x, y, z);
+					cob_cop_up.emplace_back(tmp_mat);
+					cob_cop_dn.emplace_back(tmp_mat);
+				}
+				else if (distance < nnn_dist + 1e-3){
+					pos.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Co2, x, y, z);
+					cobalt_up.emplace_back(tmp_mat);
+					cobalt_dn.emplace_back(tmp_mat);
+					tmp_mat = eint1(Cu2, x, y, z);
+					copper.emplace_back(tmp_mat);
+					tmp_mat = eint1(CoCu2, x, y, z);
+					cob_cop_up.emplace_back(tmp_mat);
+					cob_cop_dn.emplace_back(tmp_mat);
+				}
+			}
 		}
-	}
-
-	//This for 2nd neighbours
-	for (int k = -1; k < 2; k += 2){
-		xx = 1.*k;
-		tmp_vec << xx, 0, 0;
-		pos.emplace_back(tmp_vec);
-		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		tmp_mat = eint1(Co2, x, y, z);
-		cobalt_up.emplace_back(tmp_mat);
-		cobalt_dn.emplace_back(tmp_mat);
-		tmp_mat = eint1(Cu2, x, y, z);
-		copper.emplace_back(tmp_mat);
-		tmp_mat = eint1(CoCu2, x, y, z);
-		cob_cop_up.emplace_back(tmp_mat);
-		cob_cop_dn.emplace_back(tmp_mat);
-
-		tmp_vec << 0, xx, 0;
-		pos.emplace_back(tmp_vec);
-		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		tmp_mat = eint1(Co2, x, y, z);
-		cobalt_up.emplace_back(tmp_mat);
-		cobalt_dn.emplace_back(tmp_mat);
-		tmp_mat = eint1(Cu2, x, y, z);
-		copper.emplace_back(tmp_mat);
-		tmp_mat = eint1(CoCu2, x, y, z);
-		cob_cop_up.emplace_back(tmp_mat);
-		cob_cop_dn.emplace_back(tmp_mat);
-
-		tmp_vec << 0, 0, xx;
-		pos.emplace_back(tmp_vec);
-		x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-		tmp_mat = eint1(Co2, x, y, z);
-		cobalt_up.emplace_back(tmp_mat);
-		cobalt_dn.emplace_back(tmp_mat);
-		tmp_mat = eint1(Cu2, x, y, z);
-		copper.emplace_back(tmp_mat);
-		tmp_mat = eint1(CoCu2, x, y, z);
-		cob_cop_up.emplace_back(tmp_mat);
-		cob_cop_dn.emplace_back(tmp_mat);
 	}
 
 	// number of spacer layers
 	int N = 30;
 	// set bias
-	/* double V = 0.0; */
-	double V = 0.3;
+	double V = 0.0;
+	/* double V = 0.3; */
 
+	string Mydata;
+	ofstream Myfile;	
+	if (abs(V) < 1e-4)
+		Mydata = "mpi_SC_V0.txt";
+	else
+		Mydata = "mpi_SC_V.txt";
+	Myfile.open( Mydata.c_str(),ios::trunc );
+
+	const double k = 8.617e-5/13.6058;//boltzmann constant (in Ryds)
+	const double T = 300;//set the temperature
+	double kT = k*T;
 	//set up the variables to send
 	variables send;
+	send.kT = kT;
 	send.N = N;
 	send.Ef = Ef;
-	send.x = 0.; //for now!
-	send.z = 0.; //for now!
+	send.x = 2.532374; //for now!
+	send.z = 2.532374; //for now!
 	send.t = &t;
 	send.pos = &pos;
 	send.basis = &basis;
@@ -659,60 +620,62 @@ int main()
 
 	vector<double> answer;
 	answer.reserve(N);
-	/* answer = switching(&send); */
+	answer = switching(&send);
 
-	vector<double> result;
-	vector<double> integrate;
-	result.reserve(N);
-	integrate.reserve(N);
-	for (int i = 0; i < N; i++)
-		result[i] = 0.;
-	int n = 350;//set the number of k-points along x axis
-	/* int n = 2;//set the number of k-points along x axis */
-	int counter = 0;
-	double factor = 2./(n*n);
-	int sumk = n*(n + 1)/2;
-	int p, q;
-	int product1;
-	int myid, numprocs;
-	time_t timer;
-	int k, l, i;
-	int start_time = time(&timer);
-	MPI_Init(NULL,NULL);
-	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-	for (k = 2*myid + 1; k<2*sumk; k+=2*numprocs){
-		for (l = 0; l < n; l++){
-			product1 = (2*n - l)*(l + 1);
-			if ( k < product1){
-				p = 2*(k/(2*n - l)) + 1;
-				q = (l*(l + 1) + k)%(2*n);
-				break;
-			}
-		}
-		send.x = M_PI*p/(2*n);
-		send.z = M_PI*q/(2*n);
-		integrate = switching(&send);
-		for (i = 0; i < N; i++){
-			if ((p==1) && (q==1))
-				result[i] += factor*0.5*integrate[i];
-			else if (p==q)
-				result[i] += factor*0.5*integrate[i];
-			else
-				result[i] += factor*integrate[i];
-		}
-		counter++;
-	}
-	cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl;
-	cout<<"process "<<myid<<" performed "<<counter<<" computations"<<endl;
-	for (i = 0; i < N; i++)
-		MPI_Reduce(&result[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-	if (myid == 0){
+	/* vector<double> result; */
+	/* vector<double> integrate; */
+	/* result.reserve(N); */
+	/* integrate.reserve(N); */
+	/* for (int i = 0; i < N; i++) */
+	/* 	result[i] = 0.; */
+	/* int n = 350;//set the number of k-points along x axis */
+	/* /1* int n = 2;//set the number of k-points along x axis *1/ */
+	/* int counter = 0; */
+	/* double factor = 2./(n*n); */
+	/* int sumk = n*(n + 1)/2; */
+	/* int p, q; */
+	/* int product1; */
+	/* int myid, numprocs; */
+	/* time_t timer; */
+	/* int k, l, i; */
+	/* int start_time = time(&timer); */
+	/* MPI_Init(NULL,NULL); */
+	/* MPI_Comm_size(MPI_COMM_WORLD, &numprocs); */
+	/* MPI_Comm_rank(MPI_COMM_WORLD, &myid); */
+	/* for (k = 2*myid + 1; k<2*sumk; k+=2*numprocs){ */
+	/* 	for (l = 0; l < n; l++){ */
+	/* 		product1 = (2*n - l)*(l + 1); */
+	/* 		if ( k < product1){ */
+	/* 			p = 2*(k/(2*n - l)) + 1; */
+	/* 			q = (l*(l + 1) + k)%(2*n); */
+	/* 			break; */
+	/* 		} */
+	/* 	} */
+	/* 	send.x = M_PI*(p + q)/(2*n);//this translates the grid for fcc 1st BZ */
+	/* 	send.z = M_PI*(p - q)/(2*n);//this translates the grid for fcc 1st BZ */
+	/* 	integrate = switching(&send); */
+	/* 	for (i = 0; i < N; i++){ */
+	/* 		if ((p==1) && (q==1)) */
+	/* 			result[i] += factor*0.5*integrate[i]; */
+	/* 		else if (p==q) */
+	/* 			result[i] += factor*0.5*integrate[i]; */
+	/* 		else */
+	/* 			result[i] += factor*integrate[i]; */
+	/* 	} */
+	/* 	counter++; */
+	/* } */
+	/* cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl; */
+	/* cout<<"process "<<myid<<" performed "<<counter<<" computations"<<endl; */
+	/* for (i = 0; i < N; i++) */
+	/* 	MPI_Reduce(&result[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD); */
+	/* if (myid == 0){ */
+
 		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
 		for (int i = 0; i < N; i++)
 			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
-	}
-	MPI_Finalize();
+
+	/* } */
+	/* MPI_Finalize(); */
 
 	return 0;
 }
