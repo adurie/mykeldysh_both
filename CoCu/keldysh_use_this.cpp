@@ -7,6 +7,7 @@
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/src/Core/util/MKL_support.h>
 /* #include "vector_integration.h" */
+#include <gsl/gsl_integration.h>
 #include <vector>
 #include "CoCuCo.h"
 #include <ctime>
@@ -28,6 +29,7 @@ typedef Matrix<dcomp, 36, 36> dddmat;
 typedef struct
 	{
 		int N;
+		int E_N;
 		double Ef;
 		double x;
 		double z;
@@ -93,7 +95,7 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	return result;
 }
 
-vector<double> f(const double theta, const dcomp E, variables * send, const int myswitch) {
+double f(const double theta, const dcomp E, variables * send, const int myswitch, vector<double> &result) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
@@ -111,6 +113,8 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
         vM copper = *send->copper;
        	vM cob_cop_up = *send->cob_cop_up; 
 	vM cob_cop_dn = *send->cob_cop_dn;
+	int E_N = send->E_N;
+
 	/* cout<<"x = "<<x<<" z = "<<z<<" V = "<<V<<" N = "<<N<<" Ef = "<<Ef<<endl; */
 
 	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, 
@@ -264,10 +268,12 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
 	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
 	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
+	if ((myswitch == 1) || (E_N % 2 == 1)){
+		GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
+		GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
+		GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
+		GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
+	}
 
 	dddmat GR, GL_even, GL_odd, GR_dagg;
 	GR.fill(0.);
@@ -313,44 +319,83 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	//TODO at the moment, this is only accurate from N = 4...
 	//because of gmean behaviour. See questions.txt
 //adlayer layer 2 from layer 1 to spacer thickness, N
-	vector<double> result;
-	result.reserve(N);
-	for (int it=0; it < N/2; ++it){
-		GL_even.topLeftCorner(18,18) = GL_up_even;
-		GL_even.bottomRightCorner(18,18) = GL_dn_even;
-		GL_odd.topLeftCorner(18,18) = GL_up_odd;
-		GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
-		A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
-		B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
-		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
-		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
-		if (myswitch == 0){
+	double spincurrent = 0;
+	if (myswitch == 0){
+		if (E_N % 2 == 0){
+			for (int kk = 0; kk < E_N/2; kk++){
+				GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
+				GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
+			}
+			GL_even.topLeftCorner(18,18) = GL_up_even;
+			GL_even.bottomRightCorner(18,18) = GL_dn_even;
+			A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
+			B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
 			tmp1 = B_even*GR_dagg_T_dagg;
 			tmp2 = A_even*tmp1;
 			tmp1 = T*tmp2;
 			tmp2 = GL_even*tmp1;
 			TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
+			spincurrent = (-1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+		}
+		if (E_N % 2 == 1){
+			for (int kk = 0; kk < E_N/2; kk++){
+				GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
+				GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
+			}
+			GL_odd.topLeftCorner(18,18) = GL_up_odd;
+			GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
+			A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
+			B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
 			tmp1 = B_odd*GR_dagg_T_dagg;
 			tmp2 = A_odd*tmp1;
 			tmp1 = T*tmp2;
 			tmp2 = GL_odd*tmp1;
 			TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
-			spincurrent_even = (-1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-			spincurrent_odd = (-1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+			spincurrent = (-1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
 		}
-		if (myswitch == 1){
+	}
+	if (myswitch == 1){
+		for (int it=0; it < N/2; ++it){
+			GL_even.topLeftCorner(18,18) = GL_up_even;
+			GL_even.bottomRightCorner(18,18) = GL_dn_even;
+			GL_odd.topLeftCorner(18,18) = GL_up_odd;
+			GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
+			A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
+			B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
+			A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
+			B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
 			TOT_even = (B_even.adjoint()-A_even)*Pauli;
 			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
 			spincurrent_even = -.25*imag(TOT_even.trace());
 			spincurrent_odd = -.25*imag(TOT_odd.trace());
+			result.emplace_back(spincurrent_even);
+			result.emplace_back(spincurrent_odd);
+			GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
+			GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
+			GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
+			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
 		}
-		result.emplace_back(spincurrent_even);
-		result.emplace_back(spincurrent_odd);
-		GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-		GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
-		GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
 	}
+	cout<<E_N<<endl;
+	return spincurrent;
+}
+
+double int_theta_E(const dcomp E, variables * send, const int myswitch) {
+	double result = 0.;
+	double integrate;
+	double theta;
+	vector<double> dummy;
+
+	const int n = 10;
+	/* const int n = 1; */
+	for (int k=0; k<n+1; k++) {
+		theta = k*M_PI/n;
+		integrate = f(theta, E, send, myswitch, dummy);
+		if ((k==0)||(k==n))
+			result += M_PI*(0.5/n)*integrate;
+		else 
+			result += (M_PI/n)*integrate;
+	}	
 	return result;
 }
 
@@ -360,15 +405,19 @@ vector<double> int_theta(const dcomp E, variables * send, const int myswitch) {
 	int N = send->N;
 	result.reserve(N);
 	integrate.reserve(N);
-	for (int i = 0; i < N; i++)
+	for (int i = 0; i < N; i++){
 		result[i] = 0.;
+		integrate[i] = 0.;
+	}
 	double theta;
+	double dummy;
 
 	const int n = 10;
 	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(theta, E, send, myswitch);
+		integrate.clear();
+		dummy = f(theta, E, send, myswitch, integrate);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += M_PI*(0.5/n)*integrate[i];
@@ -379,18 +428,14 @@ vector<double> int_theta(const dcomp E, variables * send, const int myswitch) {
 	return result;
 }
 
-double pass(double E, vector<double> &result, void * params) {
+double pass(double E, void * params) {
 	variables * send = (variables *) params;
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
 	E_send = E + 1e-6*im;
-	result =  int_theta(E_send, send, 0);
-	double dresult = 0.;
-	/* for (int k = 0; k < send->N; k++) */
-		/* dresult += abs(result[k]); */
-	dresult = result[4];
-	return dresult;
+	double result =  int_theta_E(E_send, send, 0);
+	return result;
 }
 
 vector<double> int_energy(variables * send) {
@@ -399,41 +444,43 @@ vector<double> int_energy(variables * send) {
 	double Ef = send->Ef;
 
 	result.reserve(N);
-	for (int i = 0; i < N; i++)
-		result.emplace_back(0.);
 
 	double end = Ef + 0.1;
 	double start = Ef - send->V - 0.1;
 	double dresult;
 
-	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000); */
-	/* my_gsl_function F; */
-	/* F.function = &pass; */
-	/* F.params = send; */
-	/* double tol = 1e-4; */
-	/* int max_it = 1000; */
-	/* double error; */
-	/* int key = 1; */
-	/* int status; */
-	/* status = gsl_integration_qag(&F, start, end, tol, 0, max_it, key, w, result, &dresult, &error); */
-	/* cout<<status<<endl; */
-	/* gsl_integration_workspace_free (w); */
+	double tol = 1e-3;
+	int max_it = 1000;
+	double error;
+	int key = 1;
+	int status;
+	for (int i = 0; i < N; i++){
+		gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000);
+		gsl_function F;
+		F.function = &pass;
+		send->E_N = i;
+		F.params = send;
+		status = gsl_integration_qag(&F, start, end, tol, 0, max_it, key, w, &dresult, &error);
+		cout<<status<<endl;
+		result.emplace_back(dresult);
+		gsl_integration_workspace_free (w);
+	}
 
-	double E;
-	vector<double> integrate;
-	integrate.reserve(N);
-	const int n = 2000;
-	double factor = (end - start)/(n*1.);
-	for (int k=0; k<n+1; k++) {
-		E = start + k*(end-start)/(n*1.);
-		dresult = pass(E, integrate, send);
-		for (int i = 0; i < N; i++){
-			if ((k==0)||(k==n))
-				result[i] += 0.5*factor*integrate[i];
-			else 
-				result[i] += factor*integrate[i];
-		}
-	}	
+	/* double E; */
+	/* vector<double> integrate; */
+	/* integrate.reserve(N); */
+	/* const int n = 2000; */
+	/* double factor = (end - start)/(n*1.); */
+	/* for (int k=0; k<n+1; k++) { */
+	/* 	E = start + k*(end-start)/(n*1.); */
+	/* 	dresult = pass(E, integrate, send); */
+	/* 	for (int i = 0; i < N; i++){ */
+	/* 		if ((k==0)||(k==n)) */
+	/* 			result[i] += 0.5*factor*integrate[i]; */
+	/* 		else */ 
+	/* 			result[i] += factor*integrate[i]; */
+	/* 	} */
+	/* } */	
 
 	return result;
 }
@@ -620,9 +667,9 @@ int main()
 	string Mydata;
 	ofstream Myfile;	
 	if (abs(V) < 1e-4)
-		Mydata = "mpi_SC_V0.txt";
+		Mydata = "Keldysh_V0.txt";
 	else
-		Mydata = "mpi_SC_V.txt";
+		Mydata = "Keldysh_V.txt";
 
 	/* vector<double> result; */
 	/* vector<double> integrate; */
@@ -674,7 +721,7 @@ int main()
 
 		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
 		Myfile.open( Mydata.c_str(),ios::trunc );
-		for (int i = 0; i < N; i++)
+		for (int i = 0; i < N+2; i++)
 			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
 
 	/* } */

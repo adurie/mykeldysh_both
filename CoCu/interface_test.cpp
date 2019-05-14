@@ -219,55 +219,45 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	ddmat GR_dn = gs(OMdn, FM_T_dagg);
 	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
 	
-	/* //this for trilayer */
-	/* ddmat GL_up_even = gs(OMup, FM_T); */
-	/* ddmat GL_dn_even = gs(OMdn, FM_T); */
+	//this for trilayer
+	ddmat GL_up_even = gs(OMup, FM_T);
+	ddmat GL_dn_even = gs(OMdn, FM_T);
 
-	//this below block for 5 layer
-	ddmat GL_up_even = gs(OM - NM, NM_T);
-	ddmat GL_dn_even = GL_up_even;
-//lim is thickness of layer 2
-	const int lim = 10;
-	ddmat ins;
-	M9 Ismall = M9::Identity();
-	ins.fill(0.);
-	ins.topLeftCorner(9,9) = 500.*Ismall;
-	ins.bottomRightCorner(9,9) = 500.*Ismall;
-//build thickness of layer 2 to lim layers
-//add ten bilayers of artificial insulater 
-	for (int it=0; it < lim; ++it){
-		if (lim > 1){
-			ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1));
-			ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));
-		}
-		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-	}
-//lim2 is thickness of layer 3
-	const int lim2 = 10;
-//build thickness of layer 3 to lim2 layers
-//add 10 bilayers i.e. 20 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
-	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
-	}
+	/* //this below block for 5 layer */
+	/* ddmat GL_up_even = gs(OM - NM, NM_T); */
+	/* ddmat GL_dn_even = GL_up_even; */
+/* //lim is thickness of layer 2 */
+	/* const int lim = 10; */
+	/* ddmat ins; */
+	/* M9 Ismall = M9::Identity(); */
+	/* ins.fill(0.); */
+	/* ins.topLeftCorner(9,9) = 500.*Ismall; */
+	/* ins.bottomRightCorner(9,9) = 500.*Ismall; */
+/* //build thickness of layer 2 to lim layers */
+/* //add ten bilayers of artificial insulater */ 
+	/* for (int it=0; it < lim; ++it){ */
+	/* 	if (lim > 1){ */
+	/* 		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1)); */
+	/* 		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1)); */
+	/* 	} */
+	/* 	GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse(); */
+	/* 	GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse(); */
+	/* } */
+/* //lim2 is thickness of layer 3 */
+	/* const int lim2 = 10; */
+/* //build thickness of layer 3 to lim2 layers */
+/* //add 10 bilayers i.e. 20 layers of FM */
+	/* GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse(); */
+	/* GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse(); */
+	/* for (int it=0; it < lim2 - 1; ++it){ */
+	/* 	GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse(); */
+	/* 	GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse(); */
+	/* } */
 
-	ddmat GL_up_odd = GL_up_even;
-	ddmat GL_dn_odd = GL_dn_even;
-	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
-	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
-	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
-	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
-	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
+	dddmat Pauli;//This is the y Pauli sigma Matrix
+	Pauli.fill(0.);
+	Pauli.topRightCorner(18,18) = -i*I;
+	Pauli.bottomLeftCorner(18,18) = i*I;
 
 	dddmat GR, GL_even, GL_odd, GR_dagg;
 	GR.fill(0.);
@@ -277,45 +267,135 @@ vector<double> f(const double theta, const dcomp E, variables * send, const int 
 	GR.bottomRightCorner(18,18) = GR_dn;
 	GR = S.inverse()*GR*S;
 
+	ddmat GL_up_odd = GL_up_even;
+	ddmat GL_dn_odd = GL_dn_even;
+	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
+	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
+
+	vector<double> result;
+	result.reserve(N);
+	double spincurrent_even, spincurrent_odd;
+	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
+	dddmat T, Tdagg;
 	dddmat Ibig = dddmat::Identity();
 	dddmat Tmean, Tmeandagg;
+	dddmat OMbig = E*Ibig;
+	dddmat NMbig;
+	dddmat GR_T_dagg, GR_dagg_T_dagg;
+	dddmat tmp1, tmp2;
+	T.fill(0.);
+
+	GL_even.topLeftCorner(18,18) = GL_up_even;
+	GL_even.bottomRightCorner(18,18) = GL_dn_even;
+	T.topLeftCorner(18,18) = FM_T;//TODO it must be in the T's!
+	T.bottomRightCorner(18,18) = FM_T;//TODO it must be in the T's!
+	Tdagg = T.adjoint();
+	GR_T_dagg = GR*Tdagg;
+	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
+	B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
+	if (myswitch == 0){
+		tmp1 = B_even*GR_dagg_T_dagg;
+		tmp2 = A_even*tmp1;
+		tmp1 = T*tmp2;
+		tmp2 = GL_even*tmp1;
+		TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
+		spincurrent_even = (-1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+	}
+	if (myswitch == 1){
+		TOT_even = (B_even.adjoint()-A_even)*Pauli;
+		spincurrent_even = -.25*imag(TOT_even.trace());
+	}
+
+	T.topLeftCorner(18,18) = odd_l1_T1;//TODO it must be in the T's!
+	T.bottomRightCorner(18,18) = odd_l1_T1;//TODO it must be in the T's!
+	Tdagg = T.adjoint();
+	GR_T_dagg = GR*Tdagg;
+	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
+	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
+	GL_odd.topLeftCorner(18,18) = GL_up_odd;
+	GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
+	A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
+	B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
+	if (myswitch == 0){
+		tmp1 = B_odd*GR_dagg_T_dagg;
+		tmp2 = A_odd*tmp1;
+		tmp1 = T*tmp2;
+		tmp2 = GL_odd*tmp1;
+		TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
+		spincurrent_odd = (-1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+	}
+	if (myswitch == 1){
+		TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
+		spincurrent_odd = -.25*imag(TOT_odd.trace());
+	}
+	result.emplace_back(spincurrent_even);
+	result.emplace_back(spincurrent_odd);
+
+	GL_up_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
+	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
+	GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
+	GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
+	GL_odd.topLeftCorner(18,18) = GL_up_odd;
+	GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
+	GL_even.topLeftCorner(18,18) = GL_up_even;
+	GL_even.bottomRightCorner(18,18) = GL_dn_even;
+	T.topLeftCorner(18,18) = FM_NM_T;//TODO it must be in the T's!
+	T.bottomRightCorner(18,18) = FM_NM_T;//TODO it must be in the T's!
+	Tdagg = T.adjoint();
+	GR_T_dagg = GR*Tdagg;
+	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
+	B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
+	if (myswitch == 0){
+		tmp1 = B_even*GR_dagg_T_dagg;
+		tmp2 = A_even*tmp1;
+		tmp1 = T*tmp2;
+		tmp2 = GL_even*tmp1;
+		TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
+		spincurrent_even = (-1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+	}
+	if (myswitch == 1){
+		TOT_even = (B_even.adjoint()-A_even)*Pauli;
+		spincurrent_even = -.25*imag(TOT_even.trace());
+	}
+	A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
+	B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
+	if (myswitch == 0){
+		tmp1 = B_odd*GR_dagg_T_dagg;
+		tmp2 = A_odd*tmp1;
+		tmp1 = T*tmp2;
+		tmp2 = GL_odd*tmp1;
+		TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
+		spincurrent_odd = (-1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+	}
+	if (myswitch == 1){
+		TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
+		spincurrent_odd = -.25*imag(TOT_odd.trace());
+	}
+	result.emplace_back(spincurrent_even);
+	result.emplace_back(spincurrent_odd);
+
 	Tmean.fill(0.);
 	Tmean.topLeftCorner(18,18) = FM_NM_T;
 	Tmean.bottomRightCorner(18,18) = FM_NM_T;
 	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;
 	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;
-	dddmat OMbig = E*Ibig;
-	dddmat NMbig;
 	NMbig.fill(0.);
 	NMbig.topLeftCorner(18,18) = NM;
 	NMbig.bottomRightCorner(18,18) = NM;
 	//adlayer one bilayer onto RHS G to ensure gmean is correct
-	//this means 2 layers are on before we begin!
 	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
 	GR_dagg = GR.adjoint();
 
-	dddmat Pauli;//This is the y Pauli sigma Matrix
-	Pauli.fill(0.);
-	Pauli.topRightCorner(18,18) = -i*I;
-	Pauli.bottomLeftCorner(18,18) = i*I;
-
-	double spincurrent_even, spincurrent_odd;
-	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
-	dddmat T, Tdagg;
-	T.fill(0.);
 	T.topLeftCorner(18,18) = NM_T;
 	T.bottomRightCorner(18,18) = NM_T;
 	Tdagg = T.adjoint();
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
 	GR_T_dagg = GR*Tdagg;
 	GR_dagg_T_dagg = GR_dagg*Tdagg;
-	dddmat tmp1, tmp2;
-	//TODO at the moment, this is only accurate from N = 4...
-	//because of gmean behaviour. See questions.txt
 //adlayer layer 2 from layer 1 to spacer thickness, N
-	vector<double> result;
-	result.reserve(N);
-	for (int it=0; it < N/2; ++it){
+	for (int it=0; it < (N-2)/2; ++it){
 		GL_even.topLeftCorner(18,18) = GL_up_even;
 		GL_even.bottomRightCorner(18,18) = GL_dn_even;
 		GL_odd.topLeftCorner(18,18) = GL_up_odd;
@@ -387,9 +467,8 @@ double pass(double E, vector<double> &result, void * params) {
 	E_send = E + 1e-6*im;
 	result =  int_theta(E_send, send, 0);
 	double dresult = 0.;
-	/* for (int k = 0; k < send->N; k++) */
-		/* dresult += abs(result[k]); */
-	dresult = result[4];
+	for (int k = 0; k < send->N; k++)
+		dresult += result[k];
 	return dresult;
 }
 
@@ -410,10 +489,10 @@ vector<double> int_energy(variables * send) {
 	/* my_gsl_function F; */
 	/* F.function = &pass; */
 	/* F.params = send; */
-	/* double tol = 1e-4; */
+	/* double tol = 4e-3; */
 	/* int max_it = 1000; */
 	/* double error; */
-	/* int key = 1; */
+	/* int key = 2; */
 	/* int status; */
 	/* status = gsl_integration_qag(&F, start, end, tol, 0, max_it, key, w, result, &dresult, &error); */
 	/* cout<<status<<endl; */
@@ -590,8 +669,8 @@ int main()
 	// number of spacer layers
 	int N = 30;
 	// set bias
-	/* double V = 0.0; */
-	double V = 0.3;
+	double V = 0.0;
+	/* double V = 0.3; */
 
 	const double k = 8.617e-5/13.6058;//boltzmann constant (in Ryds)
 	const double T = 300;//set the temperature
@@ -675,7 +754,7 @@ int main()
 		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
 		Myfile.open( Mydata.c_str(),ios::trunc );
 		for (int i = 0; i < N; i++)
-			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
+			Myfile<<scientific<<i<<" "<<answer[i]<<endl;
 
 	/* } */
 	/* MPI_Finalize(); */
