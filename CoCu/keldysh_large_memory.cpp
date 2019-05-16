@@ -286,6 +286,7 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	dddmat Ibig = dddmat::Identity();
 	dddmat Tmean, Tmeandagg;
 	Tmean.fill(0.);
+	Tmeandagg.fill(0.);
 	Tmean.topLeftCorner(18,18) = FM_NM_T;
 	Tmean.bottomRightCorner(18,18) = FM_NM_T;
 	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;
@@ -378,6 +379,82 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
 		}
 	}
+	return spincurrent;
+}
+
+double mem(const double theta, int N_old, variables * send, ddmat &GL_up, ddmat &GL_dn, dddmat &GR, dcomp E, ddmat &NM_T, ddmat &NM, ddmat &FM_NM_T){
+	dcomp i = -1;
+	i = sqrt(i);
+	double x = send->x;
+	double z = send->z;
+	double V = send->V;
+	int N = send->N;
+	double kT = send->kT;
+	double Ef = send->Ef;
+	int E_N = send->E_N;
+	ddmat NM_T_dagg;//TODO
+	NM_T_dagg = NM_T.adjoint();//TODO
+	ddmat I = ddmat::Identity();//TODO
+	dddmat S;
+	ddmat S11, S12;
+	S11 = cos(theta/2.)*I;
+	S12 = sin(theta/2.)*I;
+	S.topLeftCorner(18,18) = S11;
+	S.topRightCorner(18,18) = S12;
+	S.bottomLeftCorner(18,18) = -S12;
+	S.bottomRightCorner(18,18) = S11;
+	ddmat OM = E*I;
+	GR = S.inverse()*GR*S;
+	dddmat Ibig = dddmat::Identity();//TODO
+	dddmat OMbig = E*Ibig;
+	dddmat NMbig;//TODO
+	NMbig.fill(0.);//TODO
+	NMbig.topLeftCorner(18,18) = NM;//TODO
+	NMbig.bottomRightCorner(18,18) = NM;//TODO
+	dddmat Tmean, Tmeandagg;//TODO
+	Tmean.fill(0.);//TODO
+	Tmeandagg.fill(0.);//TODO
+	ddmat FM_T_dagg = FM_T.adjoint();//TODO
+	Tmean.topLeftCorner(18,18) = FM_NM_T;//TODO
+	Tmean.bottomRightCorner(18,18) = FM_NM_T;//TODO
+	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;//TODO
+	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;//TODO
+	//adlayer one bilayer onto RHS G to ensure gmean is correct
+	//this means 2 layers are on before we begin!
+	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
+	GR_dagg = GR.adjoint();
+
+	dddmat Pauli;//This is the y Pauli sigma Matrix TODO
+	Pauli.fill(0.);//TODO
+	Pauli.topRightCorner(18,18) = -i*I;//TODO
+	Pauli.bottomLeftCorner(18,18) = i*I;//TODO
+
+	double spincurrent;
+	dddmat A, B, TOT;
+	dddmat T, Tdagg;
+	T.fill(0.);//TODO
+	T.topLeftCorner(18,18) = NM_T;//TODO
+	T.bottomRightCorner(18,18) = NM_T;//TODO
+	Tdagg = T.adjoint();//TODO
+	dddmat GR_T_dagg, GR_dagg_T_dagg;
+	GR_T_dagg = GR*Tdagg;
+	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	dddmat tmp1, tmp2;
+	int N_diff = E_N - N_old;
+	for (int kk = 0; kk < N_old/2; kk++){
+		GL_up = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse();
+		GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse();
+	}
+	GL.topLeftCorner(18,18) = GL_up;
+	GL.bottomRightCorner(18,18) = GL_dn;
+	A = (Ibig-GR_T_dagg*GL*T).inverse();
+	B = (Ibig-GR_dagg_T_dagg*GL.adjoint()*T).inverse();
+	tmp1 = B*GR_dagg_T_dagg;
+	tmp2 = A*tmp1;
+	tmp1 = T*tmp2;
+	tmp2 = GL*tmp1;
+	TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
+	spincurrent = (-1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
 	return spincurrent;
 }
 
