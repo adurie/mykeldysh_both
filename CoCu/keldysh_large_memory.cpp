@@ -23,6 +23,8 @@ typedef complex<double> dcomp;
 typedef Matrix<complex<double>, 9, 9> M9;
 typedef vector<Vector3d, aligned_allocator<Vector3d>> vec3;
 typedef vector<Matrix<dcomp, 9, 9>, aligned_allocator<Matrix<dcomp, 9, 9>>> vM;
+typedef vector<Matrix<dcomp, 18, 18>, aligned_allocator<Matrix<dcomp, 18, 18>>> vMM;
+typedef vector<Matrix<dcomp, 36, 36>, aligned_allocator<Matrix<dcomp, 36, 36>>> vMMM;
 typedef Matrix<dcomp, 18, 18> ddmat;
 typedef Matrix<dcomp, 36, 36> dddmat;
 
@@ -43,6 +45,14 @@ typedef struct
 	        vM *copper;
 	       	vM *cob_cop_up; 
 		vM *cob_cop_dn;
+		vector<int> *N_old;
+		vMM *GL_U;
+		vMM *GL_D;
+		vMMM *GR;
+		ddmat *NM_T;
+		ddmat *NM;
+		ddmat *FM_NM_T;
+		vector<double> *E_list;
 	}
 variables;
 
@@ -382,98 +392,121 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	return spincurrent;
 }
 
-double mem(const double theta, int N_old, variables * send, ddmat &GL_up, ddmat &GL_dn, dddmat &GR, dcomp E, ddmat &NM_T, ddmat &NM, ddmat &FM_NM_T){
-	dcomp i = -1;
-	i = sqrt(i);
-	double x = send->x;
-	double z = send->z;
-	double V = send->V;
-	int N = send->N;
-	double kT = send->kT;
-	double Ef = send->Ef;
-	int E_N = send->E_N;
-	ddmat NM_T_dagg;//TODO
-	NM_T_dagg = NM_T.adjoint();//TODO
-	ddmat I = ddmat::Identity();//TODO
-	dddmat S;
-	ddmat S11, S12;
-	S11 = cos(theta/2.)*I;
-	S12 = sin(theta/2.)*I;
-	S.topLeftCorner(18,18) = S11;
-	S.topRightCorner(18,18) = S12;
-	S.bottomLeftCorner(18,18) = -S12;
-	S.bottomRightCorner(18,18) = S11;
-	ddmat OM = E*I;
-	GR = S.inverse()*GR*S;
-	dddmat Ibig = dddmat::Identity();//TODO
-	dddmat OMbig = E*Ibig;
-	dddmat NMbig;//TODO
-	NMbig.fill(0.);//TODO
-	NMbig.topLeftCorner(18,18) = NM;//TODO
-	NMbig.bottomRightCorner(18,18) = NM;//TODO
-	dddmat Tmean, Tmeandagg;//TODO
-	Tmean.fill(0.);//TODO
-	Tmeandagg.fill(0.);//TODO
-	ddmat FM_T_dagg = FM_T.adjoint();//TODO
-	Tmean.topLeftCorner(18,18) = FM_NM_T;//TODO
-	Tmean.bottomRightCorner(18,18) = FM_NM_T;//TODO
-	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;//TODO
-	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;//TODO
-	//adlayer one bilayer onto RHS G to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
-	GR_dagg = GR.adjoint();
+/* double mem(const double theta, int N_old, variables * send, ddmat &GL_up, ddmat &GL_dn, dddmat &GR, dcomp E, ddmat &NM_T, ddmat &NM, ddmat &FM_NM_T){ */
+/* 	dcomp i = -1; */
+/* 	i = sqrt(i); */
+/* 	double x = send->x; */
+/* 	double z = send->z; */
+/* 	double V = send->V; */
+/* 	int N = send->N; */
+/* 	double kT = send->kT; */
+/* 	double Ef = send->Ef; */
+/* 	int E_N = send->E_N; */
+/* 	ddmat NM_T_dagg;//TODO */
+/* 	NM_T_dagg = NM_T.adjoint();//TODO */
+/* 	ddmat I = ddmat::Identity();//TODO */
+/* 	dddmat S; */
+/* 	ddmat S11, S12; */
+/* 	S11 = cos(theta/2.)*I; */
+/* 	S12 = sin(theta/2.)*I; */
+/* 	S.topLeftCorner(18,18) = S11; */
+/* 	S.topRightCorner(18,18) = S12; */
+/* 	S.bottomLeftCorner(18,18) = -S12; */
+/* 	S.bottomRightCorner(18,18) = S11; */
+/* 	ddmat OM = E*I; */
+/* 	GR = S.inverse()*GR*S; */
+/* 	dddmat Ibig = dddmat::Identity();//TODO */
+/* 	dddmat OMbig = E*Ibig; */
+/* 	dddmat NMbig;//TODO */
+/* 	NMbig.fill(0.);//TODO */
+/* 	NMbig.topLeftCorner(18,18) = NM;//TODO */
+/* 	NMbig.bottomRightCorner(18,18) = NM;//TODO */
+/* 	dddmat Tmean, Tmeandagg;//TODO */
+/* 	Tmean.fill(0.);//TODO */
+/* 	Tmeandagg.fill(0.);//TODO */
+/* 	ddmat FM_T_dagg = FM_T.adjoint();//TODO */
+/* 	Tmean.topLeftCorner(18,18) = FM_NM_T;//TODO */
+/* 	Tmean.bottomRightCorner(18,18) = FM_NM_T;//TODO */
+/* 	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;//TODO */
+/* 	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;//TODO */
+/* 	//adlayer one bilayer onto RHS G to ensure gmean is correct */
+/* 	//this means 2 layers are on before we begin! */
+/* 	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse(); */
+/* 	GR_dagg = GR.adjoint(); */
 
-	dddmat Pauli;//This is the y Pauli sigma Matrix TODO
-	Pauli.fill(0.);//TODO
-	Pauli.topRightCorner(18,18) = -i*I;//TODO
-	Pauli.bottomLeftCorner(18,18) = i*I;//TODO
+	/* dddmat Pauli;//This is the y Pauli sigma Matrix TODO */
+	/* Pauli.fill(0.);//TODO */
+	/* Pauli.topRightCorner(18,18) = -i*I;//TODO */
+	/* Pauli.bottomLeftCorner(18,18) = i*I;//TODO */
 
-	double spincurrent;
-	dddmat A, B, TOT;
-	dddmat T, Tdagg;
-	T.fill(0.);//TODO
-	T.topLeftCorner(18,18) = NM_T;//TODO
-	T.bottomRightCorner(18,18) = NM_T;//TODO
-	Tdagg = T.adjoint();//TODO
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
-	GR_T_dagg = GR*Tdagg;
-	GR_dagg_T_dagg = GR_dagg*Tdagg;
-	dddmat tmp1, tmp2;
-	int N_diff = E_N - N_old;
-	for (int kk = 0; kk < N_old/2; kk++){
-		GL_up = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse();
-		GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse();
-	}
-	GL.topLeftCorner(18,18) = GL_up;
-	GL.bottomRightCorner(18,18) = GL_dn;
-	A = (Ibig-GR_T_dagg*GL*T).inverse();
-	B = (Ibig-GR_dagg_T_dagg*GL.adjoint()*T).inverse();
-	tmp1 = B*GR_dagg_T_dagg;
-	tmp2 = A*tmp1;
-	tmp1 = T*tmp2;
-	tmp2 = GL*tmp1;
-	TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
-	spincurrent = (-1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-	return spincurrent;
-}
+	/* double spincurrent; */
+	/* dddmat A, B, TOT; */
+	/* dddmat T, Tdagg; */
+	/* T.fill(0.);//TODO */
+	/* T.topLeftCorner(18,18) = NM_T;//TODO */
+	/* T.bottomRightCorner(18,18) = NM_T;//TODO */
+	/* Tdagg = T.adjoint();//TODO */
+	/* dddmat GR_T_dagg, GR_dagg_T_dagg; */
+	/* GR_T_dagg = GR*Tdagg; */
+	/* GR_dagg_T_dagg = GR_dagg*Tdagg; */
+	/* dddmat tmp1, tmp2; */
+	/* int N_diff = E_N - N_old; */
+	/* for (int kk = 0; kk < N_old/2; kk++){ */
+	/* 	GL_up = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse(); */
+	/* 	GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL*NM_T).inverse(); */
+	/* } */
+	/* GL.topLeftCorner(18,18) = GL_up; */
+	/* GL.bottomRightCorner(18,18) = GL_dn; */
+	/* A = (Ibig-GR_T_dagg*GL*T).inverse(); */
+	/* B = (Ibig-GR_dagg_T_dagg*GL.adjoint()*T).inverse(); */
+	/* tmp1 = B*GR_dagg_T_dagg; */
+	/* tmp2 = A*tmp1; */
+	/* tmp1 = T*tmp2; */
+	/* tmp2 = GL*tmp1; */
+	/* TOT = (tmp2-A*B+0.5*(A+B))*Pauli; */
+	/* spincurrent = (-1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); */
+	/* return spincurrent; */
+/* } */
 
-double int_theta_E(const dcomp E, variables * send, const int myswitch) {
+double int_theta_E(double E, void * params) {
+	variables * send = (variables *) params;
+	dcomp E_send;
+	dcomp im = -1;
+	im = sqrt(im);
+	E_send = E + 1e-6*im;
 	double result = 0.;
 	double integrate;
 	double theta;
 	vector<double> dummy;
+	vector<double> E_list;
+	E_list = *send->E_list;
+	int cond = 0;
+	for (int kk = 0; kk < E_list.size(); kk++){
+		if (abs(E-E_list[kk]) < 1e-10){
+			cond = 1;
+			break;
+		}
+	}
 
 	const int n = 10;
-	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f(theta, E, send, myswitch, dummy);
+		if ((k==0) && (cond == 0)){
+			integrate = f(theta, E_send, send, 0, dummy);
+			E_list.emplace_back(E);
+		}
+		else {
+			integrate = mem();
+			/* integrate = f(theta, E_send, send, 0, dummy); */
+			/* if (k==0) */
+			/* 	cout<<"test"<<endl; */
+		}
 		if ((k==0)||(k==n))
 			result += M_PI*(0.5/n)*integrate;
 		else 
 			result += (M_PI/n)*integrate;
 	}	
+	*send->E_list = E_list;
 	return result;
 }
 
@@ -506,16 +539,6 @@ vector<double> int_theta(const dcomp E, variables * send, const int myswitch) {
 	return result;
 }
 
-double pass(double E, void * params) {
-	variables * send = (variables *) params;
-	dcomp E_send;
-	dcomp im = -1;
-	im = sqrt(im);
-	E_send = E + 1e-6*im;
-	double result =  int_theta_E(E_send, send, 0);
-	return result;
-}
-
 vector<double> int_energy(variables * send) {
 	vector<double> result;
 	int N = send->N;
@@ -527,18 +550,31 @@ vector<double> int_energy(variables * send) {
 	double start = Ef - send->V - 0.1;
 	double dresult;
 
+	vector<int> N_old;
+	vMM GL_U;
+	vMM GL_D;
+	vMMM GR;
+	vector<double> E_list;
+	send->GL_U = &GL_U;
+	send->GL_D = &GL_D;
+	send->GR = &GR;
+	send->N_old = &N_old;
+	send->E_list = &E_list;
 	gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000);
 	gsl_function F;
-	F.function = &pass;
-	double tol = 1e-2;
-	int max_it = 1000;
+	F.function = &int_theta_E;
+	double tol = 1e2;
+	int max_it = 10;
 	double error;
-	int key = 1;
+	/* int key = 1; */
 	int status;
 	for (int i = 0; i < N; i++){
 		send->E_N = i;
 		F.params = send;
 		status = gsl_integration_qags(&F, start, end, 0, tol, max_it, w, &dresult, &error);
+		/* vector<double> test = *send->E_list; */
+		/* for (int kk = 0; kk < test.size(); kk++) */
+		/* 	cout<<test[kk]<<endl; */
 		cout<<status<<endl;
 		result.emplace_back(dresult);
 	}
