@@ -434,7 +434,7 @@ double pass(double E, void * params) {
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
-	E_send = E + 1e-6*im;
+	E_send = E + 1e-6*im;//TODO Andrey has 1e-8 here
 	double result =  int_theta_E(E_send, send, 0);
 	return result;
 }
