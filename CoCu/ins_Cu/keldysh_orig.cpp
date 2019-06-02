@@ -1,4 +1,3 @@
-//TODO THIS ISN'T WORKING CORRECTLY - DOESN'T HANDLE THE INSULATOR PROBABLY
 #include <iostream>
 #include <complex>
 #include <cmath>
@@ -44,10 +43,6 @@ typedef struct
 	        vM *copper;
 	       	vM *cob_cop_up; 
 		vM *cob_cop_dn;
-		vM *ins_copper;
-		vM *INS;
-		vM *cob_ins_up;
-		vM *cob_ins_dn;
 	}
 variables;
 
@@ -118,36 +113,7 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
         vM copper = *send->copper;
        	vM cob_cop_up = *send->cob_cop_up; 
 	vM cob_cop_dn = *send->cob_cop_dn;
-	vM ins_copper = *send->ins_copper;
-	vM INS = *send->INS;
-	vM cob_ins_up = *send->cob_ins_up;
-	vM cob_ins_dn = *send->cob_ins_dn;
 	int E_N = send->E_N;
-	M9 ins_ii, ins_12, ins_21, ins_T_ii, ins_T_12, ins_T_21, ins_NM_12,
-	   ins_NM_21, ins_NM_T_ii, ins_NM_T_12, ins_NM_T_21, ins_FM_12,
-	   ins_FM_21, ins_FM_T_ii, ins_FM_T_12, ins_FM_T_21;
-
-	//generate in plane Hamiltonians for simple bilayers
-	ins_ii = InPlaneH(pos,  basis[0], INS, x, z);
-	ins_12 = InPlaneH(pos,  basis[1], INS, x, z);
-	ins_21 = InPlaneH(pos, -basis[1], INS, x, z);
-	//generate hopping between simple bilayers of the same type
-	ins_T_ii = InPlaneH(pos, t + basis[0], INS, x, z);
-	ins_T_12 = InPlaneH(pos, t + basis[1], INS, x, z);
-	ins_T_21 = InPlaneH(pos, t - basis[1], INS, x, z);
-	//additional off diagonal Hamiltonians needed for bilayers
-	//made of different atom types
-	ins_NM_12 = InPlaneH(pos,  basis[1], ins_copper, x, z);
-	ins_NM_21 = InPlaneH(pos, -basis[1], ins_copper, x, z);
-	ins_NM_T_ii = InPlaneH(pos, t + basis[0], ins_copper, x, z);
-	ins_NM_T_12 = InPlaneH(pos, t + basis[1], ins_copper, x, z);
-	ins_NM_T_21 = InPlaneH(pos, t - basis[1], ins_copper, x, z);
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	ins_FM_12 = InPlaneH(pos,  basis[1], cob_ins_up, x, z);
-	ins_FM_21 = InPlaneH(pos, -basis[1], cob_ins_up, x, z);
-	ins_FM_T_ii = InPlaneH(pos, t + basis[0], cob_ins_up, x, z);
-	ins_FM_T_12 = InPlaneH(pos, t + basis[1], cob_ins_up, x, z);
-	ins_FM_T_21 = InPlaneH(pos, t - basis[1], cob_ins_up, x, z);
 
 	/* cout<<"x = "<<x<<" z = "<<z<<" V = "<<V<<" N = "<<N<<" Ef = "<<Ef<<endl; */
 
@@ -183,24 +149,6 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	FM_NM_T_21 = InPlaneH(pos, t - basis[1], cob_cop_dn, x, z);
 
 	ddmat FM_up, FM_dn, NM, NM_T, FM_T, FM_NM_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2;
-	ddmat ins, ins_T, ins_NM, ins_NM_T, ins_FM, ins_FM_T;
-
-	ins.topLeftCorner(9,9) = ins_ii;
-	ins.topRightCorner(9,9) = ins_12;
-	ins.bottomLeftCorner(9,9) = ins_21;
-	ins.bottomRightCorner(9,9) = ins_ii;
-	ins_T.topLeftCorner(9,9) = ins_T_ii;
-	ins_T.topRightCorner(9,9) = ins_T_12;
-	ins_T.bottomLeftCorner(9,9) = ins_T_21;
-	ins_T.bottomRightCorner(9,9) = ins_T_ii;
-	ins_NM_T.topLeftCorner(9,9) = ins_NM_T_ii;
-	ins_NM_T.topRightCorner(9,9) = ins_NM_T_12; 
-	ins_NM_T.bottomLeftCorner(9,9) = ins_NM_T_21;
-	ins_NM_T.bottomRightCorner(9,9) = ins_NM_T_ii;
-	ins_FM_T.topLeftCorner(9,9) = ins_FM_T_ii;
-	ins_FM_T.topRightCorner(9,9) = ins_FM_T_12; 
-	ins_FM_T.bottomLeftCorner(9,9) = ins_FM_T_21;
-	ins_FM_T.bottomRightCorner(9,9) = ins_FM_T_ii;
 
 	NM.topLeftCorner(9,9) = NM_ii;
 	NM.topRightCorner(9,9) = NM_12;
@@ -283,36 +231,26 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	ddmat GL_up_even = gs(OM - NM, NM_T);
 	ddmat GL_dn_even = GL_up_even;
 //lim is thickness of layer 2
-	const int lim = 1;//31-5-19 2 layers of ins
-	/* ddmat ins; */
+	const int lim = 1;
+	ddmat ins;
 	M9 Ismall = M9::Identity();
-	ddmat ins_T_dagg = ins_T.adjoint();
-	/* ins.fill(0.); */
-	/* ins.topLeftCorner(9,9) = 500.*Ismall; */
-	/* ins.bottomRightCorner(9,9) = 500.*Ismall; */
+	ins.fill(0.);
+	ins.topLeftCorner(9,9) = -.2*Ismall;
+	ins.bottomRightCorner(9,9) = -.2*Ismall;
+//build thickness of layer 2 to lim layers
 //add ten bilayers of artificial insulater 
 	for (int it=0; it < lim; ++it){
-		if (lim > 1){
-			ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1));
-			ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));
-		}
-		else
-			ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));
-		if (it == 0){
-			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
-			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
-		}
-		else {
-			GL_up_even = (OM - ins -ins_NM_T.adjoint()*GL_up_even*ins_NM_T).inverse();
-			GL_dn_even = (OM - ins -ins_NM_T.adjoint()*GL_dn_even*ins_NM_T).inverse();
-		}
+		/* ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1));//TODO TEMPORARILY REMOVED THESE */
+		/* ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));//TODO TEMPORARILY REMOVED THESE */
+		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
+		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
 	}
 //lim2 is thickness of layer 3
 	const int lim2 = 10;
 //build thickness of layer 3 to lim2 layers
 //add 10 bilayers i.e. 20 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -ins_FM_T.adjoint()*GL_up_even*ins_FM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_T.adjoint()*GL_dn_even*ins_FM_T).inverse();
+	GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
+	GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
 	for (int it=0; it < lim2 - 1; ++it){
 		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
 		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
@@ -364,10 +302,6 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	Pauli.fill(0.);
 	Pauli.topRightCorner(18,18) = -i*I;
 	Pauli.bottomLeftCorner(18,18) = i*I;
-	/* Pauli.topRightCorner(18,18) = I; */
-	/* Pauli.bottomLeftCorner(18,18) = I; */
-
-	/* dddmat Pauli = Ibig; */
 
 	double spincurrent_even, spincurrent_odd;
 	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
@@ -498,7 +432,7 @@ double pass(double E, void * params) {
 	dcomp E_send;
 	dcomp im = -1;
 	im = sqrt(im);
-	E_send = E + 1e-6*im;
+	E_send = E + 1e-6*im;//TODO Andrey has 1e-8 here
 	double result =  int_theta_E(E_send, send, 0);
 	return result;
 }
@@ -556,7 +490,7 @@ vector<double> switching(variables * send) {
 	int N = send->N;
 	double V = send->V;
 	result1.reserve(N);
-	if (abs(V) > 1e-9)
+	if (abs(V) > 1e-4)
 		result1 = int_energy(send);
 	else {
 		for (int l = 0; l < N; l++)
@@ -574,7 +508,7 @@ vector<double> switching(variables * send) {
 	for (int j=0; j!=15; j++){
 		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
 		integrate = int_theta(E, send, 1);
-		if (abs(V) < 1e-9){
+		if (abs(V) < 1e-5){
 			for (int l = 0; l < N; l++)
 				result2[l] += 2.*kT*integrate[l]; 
 		}
@@ -602,17 +536,15 @@ int main()
 
 	//This block creates the SK tight binding Hamiltonians for onsite, first 
 	//and second neighbours for Co and Cu in fcc
-	vector<double> Co1, Co2, Cu1, Cu2, ins1;//TODO recent addition (29-5-19) ins is sps+0.1 for 1st neighbour in Cu, so onsite and second nn are for Cu
-	Co1.reserve(10); Co2.reserve(10); Cu1.reserve(10); Cu2.reserve(10); ins1.reserve(10);
-	Co1 = param(1,1); Co2 = param(1,2); Cu1 = param(2,1); Cu2 = param(2,2); ins1 = param(3,1);
-	M9 Co_u, Co_d, Cu, ins0;
-	M9 I = M9::Identity();
+	vector<double> Co1, Co2, Cu1, Cu2;
+	Co1.reserve(10); Co2.reserve(10); Cu1.reserve(10); Cu2.reserve(10);
+	Co1 = param(1,1); Co2 = param(1,2); Cu1 = param(2,1); Cu2 = param(2,2);
+	M9 Co_u, Co_d, Cu;
 	Co_d = U(1,0);
 	Co_u = U(1,1);
 	Cu = U(2,0);
-	ins0 = Cu - 0.2*I;//TODO 31-5-19 this shift places the fermi level in the artificial HG
-	vector<double> CoCu1, CoCu2, CoIns, CuIns;
-	CoCu1.reserve(10); CoCu2.reserve(10); CoIns.reserve(10); CuIns.reserve(10);
+	vector<double> CoCu1, CoCu2;
+	CoCu1.reserve(10); CoCu2.reserve(10);
 	double tmp;
 	//This loop creates the geometric means used at the interfaces between elements
 	for (int k = 0; k < 10; k++){
@@ -621,13 +553,6 @@ int main()
 		tmp = gmean(Co2[k], Cu2[k]);
 		CoCu2.emplace_back(tmp);
 	}
-	CuIns = Cu1;
-	CoIns = CoCu1;
-	tmp = gmean(Co1[2], ins1[2]);
-	CoIns[2] = tmp;//TODO 22-5-19 these entries as the only difference between Cu and Ins is pps 1st nn which is index 2
-	tmp = gmean(Cu1[2], ins1[2]);
-	CuIns[2] = tmp;
-
 	//This section defines the basis atoms 
 	Vector3d bas1, bas2, tmp_vec;
 	vec3 basis;
@@ -653,11 +578,11 @@ int main()
 	X << 1, 0, 0;
 	Y << 0, 1, 0;
 	Z << 0, 0, 1;
-	vM cobalt_up, cobalt_dn, copper, cob_cop_up, cob_cop_dn, ins_copper, INS, cob_ins_up, cob_ins_dn;
+	vM cobalt_up, cobalt_dn, copper, cob_cop_up, cob_cop_dn;
 	vec3 pos;
 	pos.reserve(19);
 	cobalt_up.reserve(19); cobalt_dn.reserve(19); copper.reserve(19); cob_cop_up.reserve(19);
-	cob_cop_dn.reserve(19); ins_copper.reserve(19); INS.reserve(19); cob_ins_up.reserve(19); cob_ins_dn.reserve(19);
+	cob_cop_dn.reserve(19);
 	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
 	Matrix<dcomp, 9, 9> tmp_mat;
 	double distance;
@@ -676,10 +601,6 @@ int main()
 					copper.emplace_back(Cu);
 					cob_cop_up.emplace_back(Cu); // In theory this will not be used
 					cob_cop_dn.emplace_back(Cu); // In theory this will not be used
-					ins_copper.emplace_back(Cu); // In theory this will not be used
-					INS.emplace_back(ins0);
-					cob_ins_up.emplace_back(Cu); // In theory this will not be used
-					cob_ins_dn.emplace_back(Cu); // In theory this will not be used
 				}
 				else if (distance < nn_dist + 1e-3){
 					pos.emplace_back(tmp_vec);
@@ -694,14 +615,6 @@ int main()
 					tmp_mat = eint1(CoCu1, x, y, z);
 					cob_cop_up.emplace_back(tmp_mat);
 					cob_cop_dn.emplace_back(tmp_mat);
-
-					tmp_mat = eint1(CuIns, x, y, z);
-					ins_copper.emplace_back(tmp_mat);
-					tmp_mat = eint1(ins1, x, y, z);
-					INS.emplace_back(tmp_mat);
-					tmp_mat = eint1(CoIns, x, y, z);
-					cob_ins_up.emplace_back(tmp_mat);
-					cob_ins_dn.emplace_back(tmp_mat);
 				}
 				else if (distance < nnn_dist + 1e-3){
 					pos.emplace_back(tmp_vec);
@@ -713,13 +626,9 @@ int main()
 					cobalt_dn.emplace_back(tmp_mat);
 					tmp_mat = eint1(Cu2, x, y, z);
 					copper.emplace_back(tmp_mat);
-					ins_copper.emplace_back(tmp_mat);
-					INS.emplace_back(tmp_mat);
 					tmp_mat = eint1(CoCu2, x, y, z);
 					cob_cop_up.emplace_back(tmp_mat);
 					cob_cop_dn.emplace_back(tmp_mat);
-					cob_ins_up.emplace_back(tmp_mat);
-					cob_ins_dn.emplace_back(tmp_mat);
 				}
 			}
 		}
@@ -728,9 +637,8 @@ int main()
 	// number of spacer layers
 	int N = 10;
 	// set bias
-	/* double V = 0.0; */
-	/* double V = 0.12;//TODO 29-5-19 bandgap is approx - fake Cu - 0.07447 - fake Cu + 0.19447 */
-	double V = -0.05;//TODO 31-5-19 bandgap is approx
+	double V = 0.0;
+	/* double V = 0.05; */
 
 	const double k = 8.617e-5/13.6058;//boltzmann constant (in Ryds)
 	const double T = 300;//set the temperature
@@ -751,10 +659,6 @@ int main()
 	send.cob_cop_up = &cob_cop_up;
 	send.cob_cop_dn = &cob_cop_dn;
 	send.V = V;
-	send.ins_copper = &ins_copper;
-	send.INS = &INS;
-	send.cob_ins_up = &cob_ins_up;
-	send.cob_ins_dn = &cob_ins_dn;
 
 	vector<double> answer;
 	answer.reserve(N);
