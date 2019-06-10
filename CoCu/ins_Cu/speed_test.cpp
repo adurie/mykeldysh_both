@@ -271,10 +271,9 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 		GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
 	}
 
-	dddmat GR, GL_even, GL_odd, GR_dagg;
+	dddmat GR, GL, GR_dagg;
 	GR.fill(0.);
-	GL_even.fill(0.);
-	GL_odd.fill(0.);
+	GL.fill(0.);
 	GR.topLeftCorner(18,18) = GR_up;
 	GR.bottomRightCorner(18,18) = GR_dn;
 	GR = S.inverse()*GR*S;
@@ -301,16 +300,12 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	Pauli.topRightCorner(18,18) = -i*I;
 	Pauli.bottomLeftCorner(18,18) = i*I;
 
-	double spincurrent_even, spincurrent_odd;
-	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
+	dddmat A, B, TOT;
 	dddmat T, Tdagg;
 	T.fill(0.);
 	T.topLeftCorner(18,18) = NM_T;
 	T.bottomRightCorner(18,18) = NM_T;
 	Tdagg = T.adjoint();
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
-	GR_T_dagg = GR*Tdagg;
-	GR_dagg_T_dagg = GR_dagg*Tdagg;
 	dddmat tmp1, tmp2;
 	//TODO at the moment, this is only accurate from N = 4...
 	//because of gmean behaviour. See questions.txt
@@ -323,51 +318,35 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 		}
 		GL_up_even = NM_T_dagg*GL_up_even*NM_T;//sub GL for t^dagger*GL*t
 		GL_dn_even = NM_T_dagg*GL_dn_even*NM_T;
-		GL_even.topLeftCorner(18,18) = GL_up_even;
-		GL_even.bottomRightCorner(18,18) = GL_dn_even;
-		A_even = (Ibig-GR*GL_even).inverse();
-		B_even = (Ibig-GL_even*GR).inverse();//this is actually B^\dagger
-
-		if (myswitch == 0){//TODO this isn't looked at yet.. see notes.. equivalence to check with Maple
-			tmp1 = B_even*GR_dagg_T_dagg;
-			tmp2 = A_even*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_even*tmp1;
-			TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
-			spincurrent = (1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (myswitch == 1){
-			TOT_even = (B_even-A_even)*Pauli;
-			spincurrent = .25*imag(TOT_even.trace());
-		}
+		GL.topLeftCorner(18,18) = GL_up_even;
+		GL.bottomRightCorner(18,18) = GL_dn_even;
 	}
-	else if (E_N % 2 == 1){//TODO not touched yet as far as speedup is concerned
+	else if (E_N % 2 == 1){
 		for (int kk = 0; kk < E_N/2; kk++){
 			GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
 			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
 		}
-		GL_odd.topLeftCorner(18,18) = GL_up_odd;
-		GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
-		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
-		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
-
-		if (myswitch == 0){
-			tmp1 = B_odd*GR_dagg_T_dagg;
-			tmp2 = A_odd*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_odd*tmp1;
-			TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
-			spincurrent = (1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (myswitch == 1){
-			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
-			spincurrent = .25*imag(TOT_odd.trace());
-		}
+		GL_up_odd = NM_T_dagg*GL_up_odd*NM_T;//sub GL for t^dagger*GL*t
+		GL_dn_odd = NM_T_dagg*GL_dn_odd*NM_T;
+		GL.topLeftCorner(18,18) = GL_up_odd;
+		GL.bottomRightCorner(18,18) = GL_dn_odd;
 	}
-	else
-			cout<<"error here"<<endl;
+	A = (Ibig-GR*GL).inverse();
+	B = (Ibig-GL*GR).inverse();//this is actually B^\dagger
+
+	if (myswitch == 0){//TODO this isn't looked at yet.. see notes.. equivalence to check with Maple
+		tmp1 = (GR.adjoint() - GR)*A.adjoint();
+		tmp2 = A*tmp1;
+		tmp1 = GL*tmp2;
+		TOT = (tmp1+0.5*(B-A))*Pauli;
+		spincurrent = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+	}
+
+	if (myswitch == 1){
+		TOT = (B-A)*Pauli;
+		spincurrent = .25*imag(TOT.trace());
+	}
+
 	return spincurrent;
 }
 
@@ -597,10 +576,10 @@ int main()
 
 	double answer;
 
-	send.E_N = 2;
+	send.E_N = 0;
 	string Mydata;
 	ofstream Myfile;	
-	Mydata = "phase";
+	Mydata = "test_phase";
 	Mydata += to_string(send.E_N+4);
 	Mydata += ".txt";
 	Myfile.open( Mydata.c_str(),ios::trunc );

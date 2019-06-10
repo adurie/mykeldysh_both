@@ -229,7 +229,6 @@ vector<double> param(int numat, int numnn){
 
 		if (numnn == 1){
 			sss = -0.07518;
-			/* sps =  0.21571;//added 0.1Ry here */
 			sps =  0.11571;
 			pps =  0.19669;
 			ppp =  0.01940;
@@ -264,8 +263,9 @@ vector<double> param(int numat, int numnn){
 
 		if (numnn == 1){
 			sss = -0.07518;
+			/* sps =  0.21571;//added 0.1Ry here */
 			sps =  0.11571;
-			pps =  0.24669;
+			pps =  0.19669;
 			ppp =  0.01940;
 			sds = -0.03107;
 			pds = -0.03289;

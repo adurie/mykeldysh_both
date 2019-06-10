@@ -240,8 +240,8 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 //build thickness of layer 2 to lim layers
 //add ten bilayers of artificial insulater 
 	for (int it=0; it < lim; ++it){
-		/* ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1));//TODO TEMPORARILY REMOVED THESE */
-		/* ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));//TODO TEMPORARILY REMOVED THESE */
+		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));
+		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));
 		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
 		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
 	}
@@ -664,12 +664,21 @@ int main()
 	answer.reserve(N);
 	answer = switching(&send);
 
+	time_t now = time(0);
+	tm *ltm = localtime(&now);
 	string Mydata;
+	Mydata = to_string(ltm->tm_mday);
+	Mydata += "-";
+	Mydata += to_string(1+ltm->tm_mon);
+	Mydata += "-";
+	Mydata += to_string(1900+ltm->tm_year);
+	Mydata += "_";
+
 	ofstream Myfile;	
 	if (abs(V) < 1e-4)
-		Mydata = "Keldysh_V0.txt";
+		Mydata += "Keldysh_V0.txt";
 	else
-		Mydata = "Keldysh_V.txt";
+		Mydata += "Keldysh_V.txt";
 
 	/* vector<double> result; */
 	/* vector<double> integrate; */

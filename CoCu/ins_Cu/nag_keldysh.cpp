@@ -7,11 +7,15 @@
 #include <eigen3/Eigen/Eigenvalues>
 #include <eigen3/Eigen/src/Core/util/MKL_support.h>
 /* #include "vector_integration.h" */
-#include <gsl/gsl_integration.h>
+/* #include <gsl/gsl_integration.h> */
+#include <nag.h>
+#include <nagd01.h>
+#include <nag_stdlib.h>
 #include <vector>
 #include "CoCuCo.h"
 #include <ctime>
 #include "/home/alex/INTEL/impi/2019.1.144/intel64/include/mpi.h"
+#include <iomanip>
 #define EIGEN_DONT_PARALLELIZE
 #define EIGEN_USE_MKL_ALL
 // important note - presently the code assumes fcc only - integration
@@ -42,6 +46,17 @@ typedef struct
 	        vM *copper;
 	       	vM *cob_cop_up; 
 		vM *cob_cop_dn;
+		ddmat *NM;
+		ddmat *NM_T;
+		ddmat *FM_up;
+		ddmat *FM_dn;
+		ddmat *FM_T;
+		ddmat *FM_NM_T;
+		ddmat *odd_l1_up;
+		ddmat *odd_l1_dn;
+		ddmat *odd_l1_T1;
+		ddmat *odd_l1_T2;
+
 	}
 variables;
 
@@ -94,16 +109,300 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	return result;
 }
 
-double f(const double theta, const dcomp E, variables * send, const int myswitch) {
+double f(const double theta, const dcomp E, variables * send, const int myswitch, const ddmat &GL_UP, const ddmat &GL_DN, const dddmat &Gr) {
 // ...NM|ins|FM(0)|NM(n)|FM(theta)...
 	dcomp i = -1;
 	i = sqrt(i);
-	double x = send->x;
-	double z = send->z;
 	double V = send->V;
 	double kT = send->kT;
-	vec3 basis = *send->basis;
 	double Ef = send->Ef;
+	int E_N = send->E_N;
+	ddmat NM = *send->NM;
+	ddmat NM_T = *send->NM_T;
+	ddmat FM_T = *send->FM_T;
+	ddmat FM_NM_T = *send->FM_NM_T;
+
+	ddmat GL_up, GL_dn;
+	GL_up = GL_UP;
+	GL_dn = GL_DN;
+	dddmat GR;
+	ddmat NM_T_dagg;
+	NM_T_dagg = NM_T.adjoint();
+	ddmat FM_NM_T_dagg;
+	FM_NM_T_dagg = FM_NM_T.adjoint();
+	ddmat I = ddmat::Identity();
+	dddmat S;
+	ddmat S11, S12;
+	S11 = cos(theta/2.)*I;
+	S12 = sin(theta/2.)*I;
+	S.topLeftCorner(18,18) = S11;
+	S.topRightCorner(18,18) = S12;
+	S.bottomLeftCorner(18,18) = -S12;
+	S.bottomRightCorner(18,18) = S11;
+
+	dddmat GL, GR_dagg;
+	GL.fill(0.);
+	GR = S.inverse()*Gr*S;
+
+	dddmat Ibig = dddmat::Identity();
+	dddmat Tmean, Tmeandagg;
+	Tmean.fill(0.);
+	Tmean.topLeftCorner(18,18) = FM_NM_T;
+	Tmean.bottomRightCorner(18,18) = FM_NM_T;
+	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;
+	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;
+	dddmat OMbig = E*Ibig;
+	dddmat NMbig;
+	NMbig.fill(0.);
+	NMbig.topLeftCorner(18,18) = NM;
+	NMbig.bottomRightCorner(18,18) = NM;
+	//adlayer one bilayer onto RHS G to ensure gmean is correct
+	//this means 2 layers are on before we begin!
+	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
+	GR_dagg = GR.adjoint();
+
+	dddmat Pauli;//This is the y Pauli sigma Matrix
+	Pauli.fill(0.);
+	Pauli.topRightCorner(18,18) = -i*I;
+	Pauli.bottomLeftCorner(18,18) = i*I;
+
+	ddmat OM = E*I;
+	dddmat A, B, TOT;
+	dddmat T, Tdagg;
+	T.fill(0.);
+	T.topLeftCorner(18,18) = NM_T;
+	T.bottomRightCorner(18,18) = NM_T;
+	Tdagg = T.adjoint();
+	dddmat GR_T_dagg, GR_dagg_T_dagg;
+	GR_T_dagg = GR*Tdagg;
+	GR_dagg_T_dagg = GR_dagg*Tdagg;
+	dddmat tmp1, tmp2;
+	//TODO at the moment, this is only accurate from N = 4...
+	//because of gmean behaviour. See questions.txt
+//adlayer layer 2 from layer 1 to spacer thickness, N
+	double spincurrent = 0;
+	if (E_N % 2 == 0){
+		for (int kk = 0; kk < E_N/2; kk++){
+			GL_up = (OM - (NM - V*I) -NM_T_dagg*GL_up*NM_T).inverse();
+			GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL_dn*NM_T).inverse();
+		}
+		GL.topLeftCorner(18,18) = GL_up;
+		GL.bottomRightCorner(18,18) = GL_dn;
+		A = (Ibig-GR_T_dagg*GL*T).inverse();
+		B = (Ibig-GR_dagg_T_dagg*GL.adjoint()*T).inverse();
+
+		if (myswitch == 0){
+			tmp1 = B*GR_dagg_T_dagg;
+			tmp2 = A*tmp1;
+			tmp1 = T*tmp2;
+			tmp2 = GL*tmp1;
+			TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
+			spincurrent = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+		}
+
+		if (myswitch == 1){
+			TOT = (B.adjoint()-A)*Pauli;
+			spincurrent = .25*imag(TOT.trace());
+		}
+	}
+	else if (E_N % 2 == 1){
+		for (int kk = 0; kk < E_N/2; kk++){
+			GL_up = (OM - (NM - V*I) -NM_T_dagg*GL_up*NM_T).inverse();
+			GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL_dn*NM_T).inverse();
+		}
+		GL.topLeftCorner(18,18) = GL_up;
+		GL.bottomRightCorner(18,18) = GL_dn;
+		A = (Ibig-GR_T_dagg*GL*T).inverse();
+		B = (Ibig-GR_dagg_T_dagg*GL.adjoint()*T).inverse();
+
+		if (myswitch == 0){
+			tmp1 = B*GR_dagg_T_dagg;
+			tmp2 = A*tmp1;
+			tmp1 = T*tmp2;
+			tmp2 = GL*tmp1;
+			TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
+			spincurrent = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
+		}
+
+		if (myswitch == 1){
+			TOT = (B.adjoint()-A)*Pauli;
+			spincurrent = .25*imag(TOT.trace());
+		}
+	}
+	else
+			cout<<"error here"<<endl;
+	return spincurrent;
+}
+
+double int_theta_E(const dcomp E, variables * send, const int myswitch) {
+	double result = 0.;
+	double integrate;
+	double theta;
+	int E_N = send->E_N;
+	ddmat FM_up = *send->FM_up;
+	ddmat FM_dn = *send->FM_dn;
+	ddmat NM = *send->NM;
+	ddmat NM_T = *send->NM_T;
+	ddmat FM_T = *send->FM_T;
+	ddmat FM_NM_T = *send->FM_NM_T;
+	ddmat odd_l1_up = *send->odd_l1_up;
+	ddmat odd_l1_dn = *send->odd_l1_dn;
+	ddmat odd_l1_T1 = *send->odd_l1_T1;
+	ddmat odd_l1_T2 = *send->odd_l1_T2;
+	/* cout<<NM<<endl<<endl; */
+	double V = send->V;
+
+	ddmat I = ddmat::Identity();
+	ddmat OMup=E*I-(FM_up - V*I);
+	ddmat OMdn=E*I-(FM_dn - V*I);
+	ddmat OM = E*I;
+
+	ddmat FM_T_dagg = FM_T.adjoint();
+	ddmat GR_up = gs(OMup, FM_T_dagg);
+	ddmat GR_dn = gs(OMdn, FM_T_dagg);
+	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
+	ddmat NM_T_dagg = NM_T.adjoint();
+	
+	/* //this for trilayer */
+	/* ddmat GL_up = gs(OMup, FM_T); */
+	/* ddmat GL_dn = gs(OMdn, FM_T); */
+
+	//this below block for 5 layer
+	ddmat GL_up = gs(OM - NM, NM_T);
+	ddmat GL_dn = GL_up;
+	//this below block for 5 layer
+//lim is thickness of layer 2
+	const int lim = 1;
+	ddmat ins;
+	M9 Ismall = M9::Identity();
+	ins.fill(0.);
+	/* ins.topLeftCorner(9,9) = -.29*Ismall;//TODO 9-6-19 pushed to the top of the band to see what happens */
+	/* ins.topLeftCorner(9,9) = -.11*Ismall;//TODO 10-6-19 pushed to the bottom of the band to see what happens */
+	ins.topLeftCorner(9,9) = -.2*Ismall;
+	ins.bottomRightCorner(9,9) = -.2*Ismall;
+//build thickness of layer 2 to lim layers
+//add ten bilayers of artificial insulater 
+	for (int it=0; it < lim; ++it){
+		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));//TODO changed this so that full bias isn't on last layer so if lim = 1
+		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));// then shift = 0, 1/2 (so 1 falls on next layer)
+		GL_up = (OM - (NM + ins) -NM_T_dagg*GL_up*NM_T).inverse();
+		GL_dn = (OM - (NM + ins) -NM_T_dagg*GL_dn*NM_T).inverse();
+	}
+//lim2 is thickness of layer 3
+	const int lim2 = 10;
+//build thickness of layer 3 to lim2 layers
+//add 10 bilayers i.e. 20 layers of FM
+	GL_up = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up*FM_NM_T).inverse();
+	GL_dn = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn*FM_NM_T).inverse();
+	for (int it=0; it < lim2 - 1; ++it){
+		GL_up = (OM - (FM_up - V*I) -FM_T_dagg*GL_up*FM_T).inverse();
+		GL_dn = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn*FM_T).inverse();
+	}
+
+	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
+	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
+	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
+	//this means 2 layers are on before we begin!
+	if (E_N % 2 == 0){
+		GL_up = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up*FM_NM_T).inverse();
+		GL_dn = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn*FM_NM_T).inverse();
+	}
+	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
+	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
+	if (E_N % 2 == 1){
+		GL_up = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up*odd_l1_T1).inverse();
+		GL_dn = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn*odd_l1_T1).inverse();
+		GL_up = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up*odd_l1_T2).inverse();
+		GL_dn = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn*odd_l1_T2).inverse();
+	}
+	dddmat GR;
+	GR.fill(0.);
+	GR.topLeftCorner(18,18) = GR_up;
+	GR.bottomRightCorner(18,18) = GR_dn;
+
+	const int n = 10;
+	/* const int n = 1; */
+	for (int k=0; k<n+1; k++) {
+		theta = k*M_PI/n;
+		integrate = f(theta, E, send, myswitch, GL_up, GL_dn, GR);
+		if ((k==0)||(k==n))
+			result += M_PI*(0.5/n)*integrate;
+		else 
+			result += (M_PI/n)*integrate;
+	}	
+	/* cout<<result<<endl; */
+	return result;
+}
+
+void pass(const double E[], long nx, double fv[], long *iflag, Nag_Comm * params) {
+	/* cout<<setprecision(8)<<E<<endl; */
+	variables * send = (variables *) params->p;
+	dcomp E_send;
+	dcomp im = -1;
+	im = sqrt(im);
+	for (int k = 0; k < nx; k++){
+		E_send = E[k] + 1e-6*im;//TODO Andrey has 1e-8 here
+		fv[k] =  int_theta_E(E_send, send, 0);
+	}
+}
+
+double int_energy(variables * send) {
+	double Ef = send->Ef;
+	double left = Ef;
+	double right = Ef - send->V;
+
+	double end = max(left,right) + 0.04375;
+	double start = min(left,right) - 0.04375;
+	double result;
+
+	/* gsl_integration_workspace * w = gsl_integration_workspace_alloc (5000); */
+	/* gsl_function F; */
+	/* F.function = &pass; */
+	Nag_Comm comm;
+	Nag_QuadProgress qp;
+	double tol = 1e-5;
+	/* int max_it = 2000; */
+	long n_evals;
+	double error;
+	double errest;
+	/* int key = 1; */
+	NagError status;
+	INIT_FAIL(status);
+	comm.p = send;
+	/* F.params = send; */
+	d01rgc(start, end, pass, tol, tol, &result, &errest, &n_evals, &comm, &status);
+	/* status = gsl_integration_qags(&F, start, end, 0, tol, max_it, w, &result, &error); */
+	/* cout<<endl; */
+	cout<<"Number of function evaluations = "<<n_evals<<endl;
+	/* cout<<"Number of subintervals = "<<qp.num_subint<<endl; */
+	if (status.code != NE_NOERROR)
+		cout<<"Warning: "<<status.message<<endl;
+	/* gsl_integration_workspace_free (w); */
+
+	/* double E; */
+	/* const int n = 2000; */
+	/* double factor = (end - start)/(n*1.); */
+	/* for (int i = 0; i < N; i++){ */
+	/* 	double tmp_result = 0; */
+	/* 	for (int k=0; k<n+1; k++) { */
+	/* 		E = start + k*(end-start)/(n*1.); */
+	/* 		send->E_N = i; */
+	/* 		dresult = pass(E, send); */
+	/* 		if ((k==0)||(k==n)) */
+	/* 			tmp_result += 0.5*factor*dresult; */
+	/* 		else */ 
+	/* 			tmp_result += factor*dresult; */
+	/* 	} */	
+	/* 	result.emplace_back(tmp_result); */
+	/* } */
+
+	return result;
+}
+
+double switching(variables * send) {
+	double x = send->x;
+	double z = send->z;
+	vec3 basis = *send->basis;
 	vec3 pos = *send->pos;
 	Vector3d t = *send->t;
 	vM cobalt_up = *send->cobalt_up;
@@ -111,10 +410,6 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
         vM copper = *send->copper;
        	vM cob_cop_up = *send->cob_cop_up; 
 	vM cob_cop_dn = *send->cob_cop_dn;
-	int E_N = send->E_N;
-
-	/* cout<<"x = "<<x<<" z = "<<z<<" V = "<<V<<" N = "<<N<<" Ef = "<<Ef<<endl; */
-
 	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, 
 	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21,
 	   FM_T_ii, FM_T_12, FM_T_21, FM_NM_12, FM_NM_21, 
@@ -200,245 +495,17 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	odd_l1_T2.bottomLeftCorner(9,9) = NM_T_21;
 	odd_l1_T2.bottomRightCorner(9,9) = NM_T_ii;
 
-	ddmat NM_T_dagg;
-	NM_T_dagg = NM_T.adjoint();
-	ddmat I = ddmat::Identity();
-	dddmat S;
-	ddmat S11, S12;
-	S11 = cos(theta/2.)*I;
-	S12 = sin(theta/2.)*I;
-	S.topLeftCorner(18,18) = S11;
-	S.topRightCorner(18,18) = S12;
-	S.bottomLeftCorner(18,18) = -S12;
-	S.bottomRightCorner(18,18) = S11;
+	send->NM = &NM;
+	send->NM_T = &NM_T;
+	send->FM_up = &FM_up;
+	send->FM_dn = &FM_dn;
+	send->FM_T = &FM_T;
+	send->FM_NM_T = &FM_NM_T;
+	send->odd_l1_up = &odd_l1_up;
+	send->odd_l1_dn = &odd_l1_dn;
+	send->odd_l1_T1 = &odd_l1_T1;
+	send->odd_l1_T2 = &odd_l1_T2;
 
-	ddmat OMup=E*I-(FM_up - V*I);
-	ddmat OMdn=E*I-(FM_dn - V*I);
-	ddmat OM = E*I;
-
-	ddmat FM_T_dagg = FM_T.adjoint();
-	ddmat GR_up = gs(OMup, FM_T_dagg);
-	ddmat GR_dn = gs(OMdn, FM_T_dagg);
-	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
-	
-	/* //this for trilayer */
-	/* ddmat GL_up_even = gs(OMup, FM_T); */
-	/* ddmat GL_dn_even = gs(OMdn, FM_T); */
-
-	//this below block for 5 layer
-	ddmat OM_NM = OM - NM;
-	ddmat GL_up_even = gs(OM_NM, NM_T);
-	ddmat GL_dn_even = GL_up_even;
-//lim is thickness of layer 2
-	const int lim = 1;
-	ddmat ins;
-	M9 Ismall = M9::Identity();
-	ins.fill(0.);
-	ins.topLeftCorner(9,9) = -.2*Ismall;
-	ins.bottomRightCorner(9,9) = -.2*Ismall;
-//build thickness of layer 2 to lim layers
-//add ten bilayers of artificial insulater 
-	for (int it=0; it < lim; ++it){
-		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));//TODO changed this so that full bias isn't on last layer so if lim = 1
-		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));// then shift = 0, 1/2 (so 1 falls on next layer)
-		GL_up_even = (OM - (NM + ins) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM + ins) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-	}
-//lim2 is thickness of layer 3
-	const int lim2 = 10;
-//build thickness of layer 3 to lim2 layers
-//add 10 bilayers i.e. 20 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
-	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
-	}
-
-	ddmat GL_up_odd = GL_up_even;
-	ddmat GL_dn_odd = GL_dn_even;
-	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
-	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
-	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
-	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
-	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	if (E_N % 2 == 1){
-		GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
-		GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
-		GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
-		GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
-	}
-
-	dddmat GR, GL_even, GL_odd, GR_dagg;
-	GR.fill(0.);
-	GL_even.fill(0.);
-	GL_odd.fill(0.);
-	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomRightCorner(18,18) = GR_dn;
-	GR = S.inverse()*GR*S;
-
-	dddmat Ibig = dddmat::Identity();
-	dddmat Tmean, Tmeandagg;
-	Tmean.fill(0.);
-	Tmean.topLeftCorner(18,18) = FM_NM_T;
-	Tmean.bottomRightCorner(18,18) = FM_NM_T;
-	Tmeandagg.topLeftCorner(18,18) = FM_NM_T_dagg;
-	Tmeandagg.bottomRightCorner(18,18) = FM_NM_T_dagg;
-	dddmat OMbig = E*Ibig;
-	dddmat NMbig;
-	NMbig.fill(0.);
-	NMbig.topLeftCorner(18,18) = NM;
-	NMbig.bottomRightCorner(18,18) = NM;
-	//adlayer one bilayer onto RHS G to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
-	GR_dagg = GR.adjoint();
-
-	dddmat Pauli;//This is the y Pauli sigma Matrix
-	Pauli.fill(0.);
-	Pauli.topRightCorner(18,18) = -i*I;
-	Pauli.bottomLeftCorner(18,18) = i*I;
-
-	double spincurrent_even, spincurrent_odd;
-	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
-	dddmat T, Tdagg;
-	T.fill(0.);
-	T.topLeftCorner(18,18) = NM_T;
-	T.bottomRightCorner(18,18) = NM_T;
-	Tdagg = T.adjoint();
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
-	GR_T_dagg = GR*Tdagg;
-	GR_dagg_T_dagg = GR_dagg*Tdagg;
-	dddmat tmp1, tmp2;
-	//TODO at the moment, this is only accurate from N = 4...
-	//because of gmean behaviour. See questions.txt
-//adlayer layer 2 from layer 1 to spacer thickness, N
-	double spincurrent = 0;
-	if (E_N % 2 == 0){
-		for (int kk = 0; kk < E_N/2; kk++){
-			GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
-			GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-		}
-		GL_even.topLeftCorner(18,18) = GL_up_even;
-		GL_even.bottomRightCorner(18,18) = GL_dn_even;
-		A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
-		B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
-
-		if (myswitch == 0){
-			tmp1 = B_even*GR_dagg_T_dagg;
-			tmp2 = A_even*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_even*tmp1;
-			TOT_even = (tmp2-A_even*B_even+0.5*(A_even+B_even))*Pauli;
-			spincurrent = (1./(4.*M_PI))*real(TOT_even.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (myswitch == 1){
-			TOT_even = (B_even.adjoint()-A_even)*Pauli;
-			spincurrent = .25*imag(TOT_even.trace());
-		}
-	}
-	else if (E_N % 2 == 1){
-		for (int kk = 0; kk < E_N/2; kk++){
-			GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
-			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
-		}
-		GL_odd.topLeftCorner(18,18) = GL_up_odd;
-		GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
-		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
-		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
-
-		if (myswitch == 0){
-			tmp1 = B_odd*GR_dagg_T_dagg;
-			tmp2 = A_odd*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_odd*tmp1;
-			TOT_odd = (tmp2-A_odd*B_odd+0.5*(A_odd+B_odd))*Pauli;
-			spincurrent = (1./(4.*M_PI))*real(TOT_odd.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (myswitch == 1){
-			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
-			spincurrent = .25*imag(TOT_odd.trace());
-		}
-	}
-	else
-			cout<<"error here"<<endl;
-	return spincurrent;
-}
-
-double int_theta_E(const dcomp E, variables * send, const int myswitch) {
-	double result = 0.;
-	double integrate;
-	double theta;
-
-	const int n = 10;
-	/* const int n = 1; */
-	for (int k=0; k<n+1; k++) {
-		theta = k*M_PI/n;
-		integrate = f(theta, E, send, myswitch);
-		if ((k==0)||(k==n))
-			result += M_PI*(0.5/n)*integrate;
-		else 
-			result += (M_PI/n)*integrate;
-	}	
-	return result;
-}
-
-double pass(double E, void * params) {
-	variables * send = (variables *) params;
-	dcomp E_send;
-	dcomp im = -1;
-	im = sqrt(im);
-	E_send = E + 1e-6*im;//TODO Andrey has 1e-8 here
-	double result =  int_theta_E(E_send, send, 0);
-	return result;
-}
-
-double int_energy(variables * send) {
-	double Ef = send->Ef;
-
-	double end = Ef + 0.1;
-	double start = Ef - send->V - 0.1;
-	double result;
-
-	gsl_integration_workspace * w = gsl_integration_workspace_alloc (1000);
-	gsl_function F;
-	F.function = &pass;
-	double tol = 1e-2;
-	int max_it = 1000;
-	double error;
-	int key = 1;
-	int status;
-	F.params = send;
-	status = gsl_integration_qags(&F, start, end, 0, tol, max_it, w, &result, &error);
-	cout<<status<<endl;
-	gsl_integration_workspace_free (w);
-
-	/* double E; */
-	/* const int n = 2000; */
-	/* double factor = (end - start)/(n*1.); */
-	/* for (int i = 0; i < N; i++){ */
-	/* 	double tmp_result = 0; */
-	/* 	for (int k=0; k<n+1; k++) { */
-	/* 		E = start + k*(end-start)/(n*1.); */
-	/* 		send->E_N = i; */
-	/* 		dresult = pass(E, send); */
-	/* 		if ((k==0)||(k==n)) */
-	/* 			tmp_result += 0.5*factor*dresult; */
-	/* 		else */ 
-	/* 			tmp_result += factor*dresult; */
-	/* 	} */	
-	/* 	result.emplace_back(tmp_result); */
-	/* } */
-
-	return result;
-}
-
-double switching(variables * send) {
 	double result1, result2, integrate;
 	double V = send->V;
 	if (abs(V) > 1e-4)
@@ -574,7 +641,7 @@ int main()
 		}
 	}
 
-	double V;
+	/* double V; */
 
 	const double k = 8.617e-5/13.6058;//boltzmann constant (in Ryds)
 	const double T = 300;//set the temperature
@@ -607,13 +674,16 @@ int main()
 
 	send.E_N = 0;
 	ofstream Myfile;	
-	Mydata += "-phase";
+	Mydata += "-test-phase";
 	Mydata += to_string(send.E_N+4);
 	Mydata += ".txt";
 	Myfile.open( Mydata.c_str(),ios::trunc );
 
 	for (int kk = 0; kk < 12; kk++){
 		send.V = -0.05 + kk/100.;
+		/* send.V = -0.15 + kk/100.; */
+		/* send.V = kk/400.; */
+		/* send.V = -0.05; */
 		answer = switching(&send);
 		Myfile<<scientific<<send.V<<" "<<answer<<endl;
 	}

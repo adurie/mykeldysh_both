@@ -1,4 +1,3 @@
-//TODO THIS ISN'T WORKING CORRECTLY - DOESN'T HANDLE THE INSULATOR PROBABLY
 #include <iostream>
 #include <complex>
 #include <cmath>
@@ -292,12 +291,8 @@ double f(const double theta, const dcomp E, variables * send, const int myswitch
 	/* ins.bottomRightCorner(9,9) = 500.*Ismall; */
 //add ten bilayers of artificial insulater 
 	for (int it=0; it < lim; ++it){
-		if (lim > 1){
-			ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.-1));
-			ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));
-		}
-		else
-			ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.-1));
+		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));
+		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));
 		if (it == 0){
 			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
 			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
@@ -728,9 +723,9 @@ int main()
 	// number of spacer layers
 	int N = 10;
 	// set bias
-	/* double V = 0.0; */
+	double V = 0.0;
 	/* double V = 0.12;//TODO 29-5-19 bandgap is approx - fake Cu - 0.07447 - fake Cu + 0.19447 */
-	double V = -0.05;//TODO 31-5-19 bandgap is approx
+	/* double V = 0.05;//TODO 31-5-19 bandgap is approx */
 
 	const double k = 8.617e-5/13.6058;//boltzmann constant (in Ryds)
 	const double T = 300;//set the temperature
@@ -760,12 +755,21 @@ int main()
 	answer.reserve(N);
 	answer = switching(&send);
 
+	time_t now = time(0);
+	tm *ltm = localtime(&now);
 	string Mydata;
+	Mydata = to_string(ltm->tm_mday);
+	Mydata += "-";
+	Mydata += to_string(1+ltm->tm_mon);
+	Mydata += "-";
+	Mydata += to_string(1900+ltm->tm_year);
+	Mydata += "_";
+
 	ofstream Myfile;	
 	if (abs(V) < 1e-4)
-		Mydata = "Keldysh_V0.txt";
+		Mydata += "diff-Keldysh_V0.txt";
 	else
-		Mydata = "Keldysh_V.txt";
+		Mydata += "diff-Keldysh_V.txt";
 
 	/* vector<double> result; */
 	/* vector<double> integrate; */
