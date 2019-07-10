@@ -2,8 +2,8 @@
 #define COCUCO_H
 
 #include <cmath>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/StdVector>
+#include <Eigen/Dense>
+#include <Eigen/StdVector>
 
 using namespace std;
 using namespace Eigen;
