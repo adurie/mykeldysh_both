@@ -12,7 +12,7 @@
 #include <nagd01.h>
 #include <nag_stdlib.h>
 #include <vector>
-/* #include "AuMgOFe.h" */
+#include "AuMgOFe.h"
 #include <ctime>
 #include "/home/alex/INTEL/impi/2019.1.144/intel64/include/mpi.h"
 #include <iomanip>
@@ -932,11 +932,11 @@ int main()
 	Mg = U(3,0);
 	O = U(4,0);
 	vector<double> AuMg1, AuMg2, AuMg3, AuO1, AuO2, AuO3, MgFe_u1, MgFe_u2, MgFe_u3, MgFe_d1, MgFe_d2,
-		MgFe_d3, FeAu_u1, FeAu_u2, FeAu_u3, FeAu_d1, FeAu_d2, FeAu_d3;
+		MgFe_d3, FeAu_u1, FeAu_u2, FeAu_u3, FeAu_d1, FeAu_d2, FeAu_d3, Mg_O2;
 	AuMg1.reserve(10); AuMg2.reserve(10); AuMg3.reserve(10); AuO1.reserve(10); AuO2.reserve(10);
 	AuO3.reserve(10); MgFe_u1.reserve(10); MgFe_u2.reserve(10); MgFe_u3.reserve(10); MgFe_d1.reserve(10); 
 	MgFe_d2.reserve(10); MgFe_d3.reserve(10); FeAu_u1.reserve(10); FeAu_u2.reserve(10); FeAu_u3.reserve(10);
-	FeAu_d1.reserve(10); FeAu_d2.reserve(10); FeAu_d3.reserve(10);
+	FeAu_d1.reserve(10); FeAu_d2.reserve(10); FeAu_d3.reserve(10); Mg_O2.reserve(10);
 	vector<double> zilch;
 	zilch.reserve(10);
 	for (int zz = 0; zz < 10; zz++)
@@ -980,6 +980,8 @@ int main()
 		FeAu_d2.emplace_back(tmp);
 		tmp = gmean(zilch[k], Fe_d3[k]);
 		FeAu_d3.emplace_back(tmp);
+		tmp = gmean(Mg2[k], O2[k]);
+		Mg_O2.emplace_back(tmp);
 	}
 
 	//in-plane lattice vectors for the whole system;
@@ -999,16 +1001,17 @@ int main()
 	//This section defines the out of plane lattice vector
 	Au_lat_oop << 0, 1, 0;
 	//Distance information for n.n and n.n.n
-	double Au_nn_dist, Au_nnn_dist;
+	double Au_nn_dist, Au_nnn_dist, Au_nnnn_dist;
 	Au_nn_dist = M_SQRT2/2.;
 	Au_nnn_dist = 1.;
+	Au_nnnn_dist = 0;//this tells the code to ignore
 
 	//This section defines the basis atoms and lattice vectors for MgO 
 	Vector3d MgO_bas1, MgO_bas2, tmp_vec;
 	vec3 MgO_basis;
 	MgO_basis.reserve(2);//magic 2 is number of subatoms
-	MgO_bas1<< 0., 0., 0.;
-	MgO_bas2<< 0.5, 0., 0.;
+	MgO_bas1<< 0., 0., 0.;//Mg
+	MgO_bas2<< 0.5, 0., 0.;//O
 	MgO_basis.emplace_back(MgO_bas1);
 	MgO_basis.emplace_back(MgO_bas2);
 	//This section defines the out of plane lattice vector
@@ -1046,156 +1049,298 @@ int main()
 	/* ins_met_lat_oop2 << 0., .5, 0.; */
 	/* ins_met_lat_oop << 0., 0.6393, 0.;// this from LiCl paper detailing distance between LiCl and Co/Cu. */
 
+	double Au_Fe_nn, Au_Fe_nnn, Au_Fe_nnnn, Au_MgO_nn, Au_MgO_nnn, Au_MgO_nnnn, MgO_Fe_nn, MgO_Fe_nnn, MgO_Fe_nnnn;
+	Au_Fe_nn = 0.670012;
+	Au_Fe_nnn = 0.946;//this is the larger of the two, as Fe to Au basis 1 is 0.7996 TODO is this right..?
+	Au_Fe_nnnn = 1.181066;//this is the larger of the two, as the smaller is 1.06737; TODO is this right..?
+	Au_MgO_nn = 0.605; // Au to O;
+	Au_MgO_nnn = 0.784873;//Au to Mg
+	Au_MgO_nnnn = 0.930605;//Au to O;
+	MgO_Fe_nn = 0.505;//O to Fe
+	MgO_Fe_nnn = 0.710652;//Mg to Fe
+	MgO_Fe_nnnn = 0.868922;//O to Fe, but need to include the fact that basis 2 Fe is 0.8585534 from Mg!
+
 	//This section generates the Hamiltonians from SK parameters and NN positions
 	double x, y, z;
 	Vector3d X, Y, Z;
 	X << 1, 0, 0;
 	Y << 0, 1, 0;
 	Z << 0, 0, 1;
-	/* vM iron_up, iron_dn, gold, iron_gold_up, iron_gold_dn, ins_copper, INS, cob_ins_up, cob_ins_dn; */
-	/* vec3 LH_pos, RH_pos, ins_pos; */
-	/* Au_pos.reserve(19); Fe_pos.reserve(19); MgO_pos.reserve(19); */
-	/* cobalt_up.reserve(19); cobalt_dn.reserve(19); copper.reserve(19); cob_cop_up.reserve(19); */
-	/* cob_cop_dn.reserve(19); */
+	vM iron_up, iron_dn, gold, iron_gold_up, iron_gold_dn, gold_MgO, magnesium, oxide, iron_up_MgO, iron_dn_MgO,
+	   gold_iron_up, gold_iron_dn;
+	vec3 Au_pos, MgO_pos, Fe_pos, Au_MgO_pos, MgO_Fe_pos, Au_Fe_pos, Fe_Au_pos;
+	Au_pos.reserve(19); Fe_pos.reserve(19); MgO_pos.reserve(19); Au_MgO_pos.reserve(19); MgO_Fe_pos.reserve(19);
+	Au_Fe_pos.reserve(19); Fe_Au_pos.reserve(19);
+	iron_up.reserve(19); iron_dn.reserve(19); gold.reserve(19); iron_gold_up.reserve(19); iron_gold_dn.reserve(19);
+	gold_MgO.reserve(19); magnesium.reserve(19); oxide.reserve(19); iron_up_MgO.reserve(19); iron_dn_MgO.reserve(19);
+	gold_iron_up.reserve(19); gold_iron_dn.reserve(19);
 	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
-	/* Matrix<dcomp, 9, 9> tmp_mat; */
-	/* double distance; */
-	/* for (int i1 = -1; i1 < 2; i1++){ */
-	/* 	for (int i2 = -1; i2 < 2; i2++){ */
-	/* 		for (int i3 = -1; i3 < 2; i3++){ */
-	/* 			for (int i4 = 0; i4 < Au_basis.size(); i4++){ */
-	/* 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*Au_lat_oop + Au_basis[i4]; */
-	/* 				distance = 0; */
-	/* 				for (int l = 0; l < 3; l++) */
-	/* 					distance += tmp_vec(l)*tmp_vec(l); */
-	/* 				distance = sqrt(distance); */
-	/* 				if (distance < 1e-5){ */
-	/* 					/1* RH_pos.emplace_back(tmp_vec); *1/ */
-	/* 					/1* copper.emplace_back(Cu); *1/ */
-	/* 				} */
-	/* 				else if (distance < RH_nn_dist + 1e-3){ */
-	/* 					RH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Cu1, x, y, z); */
-	/* 					copper.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 				else if (distance < RH_nnn_dist + 1e-3){ */
-	/* 					RH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Cu2, x, y, z); */
-	/* 					copper.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 				//TODO still need to figure out Co/Cu - ins hopping! */
+	Matrix<dcomp, 9, 9> tmp_mat;
+	double distance;
+	for (int i1 = -1; i1 < 2; i1++){
+		for (int i2 = -1; i2 < 2; i2++){
+			for (int i3 = -1; i3 < 2; i3++){
+				for (int i4 = 0; i4 < Au_basis.size(); i4++){
+					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*Au_lat_oop + Au_basis[i4];
+					distance = 0;
+					for (int l = 0; l < 3; l++)
+						distance += tmp_vec(l)*tmp_vec(l);
+					distance = sqrt(distance);
+					if (distance < 1e-5){
+						Au_pos.emplace_back(tmp_vec);
+						gold.emplace_back(Au);
+					}
+					else if (distance < Au_nn_dist + 1e-3){
+						Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Au1, x, y, z);
+						gold.emplace_back(tmp_mat);
+					}
+					else if (distance < Au_nnn_dist + 1e-3){
+						Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Au2, x, y, z);
+						gold.emplace_back(tmp_mat);
+					}
 
-	/* 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*ins_met_lat_oop - RH_basis[i4] + ins_basis[i4]; */
-	/* 				/1* distance = 0; *1/ */
-	/* 				/1* for (int l = 0; l < 3; l++) *1/ */
-	/* 				/1* 	distance += tmp_vec(l)*tmp_vec(l); *1/ */
-	/* 				/1* distance = sqrt(distance); *1/ */
-	/* 				/1* if (distance < 1e-5){ *1/ */
-	/* 				/1* } *1/ */
-	/* 				/1* else if (distance < LH_nn_dist + 1e-3){ *1/ */
-	/* 				/1* } *1/ */
-	/* 				/1* else if (distance < LH_nnn_dist + 1e-3){ *1/ */
-	/* 				/1* } *1/ */
+					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[i4];
+					distance = 0;
+					for (int l = 0; l < 3; l++)
+						distance += tmp_vec(l)*tmp_vec(l);
+					distance = sqrt(distance);
+					if (distance < 1e-5){
+						MgO_pos.emplace_back(tmp_vec);
+						oxide.emplace_back(O);
+						magnesium.emplace_back(Mg);
+					}
+					else if (distance < MgO_nn_dist + 1e-3){
+						MgO_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Mg1, x, y, z);
+						oxide.emplace_back(tmp_mat);
+						magnesium.emplace_back(tmp_mat);
+					}
+					else if (distance < MgO_nnn_dist + 1e-3){
+						MgO_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Mg_O2, x, y, z);
+						oxide.emplace_back(tmp_mat);
+						magnesium.emplace_back(tmp_mat);
+					}
+					else if (distance < MgO_nnnn_dist + 1e-3){
+						MgO_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Mg3, x, y, z);
+						oxide.emplace_back(tmp_mat);
+						magnesium.emplace_back(tmp_mat);
+					}
 
-	/* 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*LH_lat_oop + LH_basis[i4]; */
-	/* 				distance = 0; */
-	/* 				for (int l = 0; l < 3; l++) */
-	/* 					distance += tmp_vec(l)*tmp_vec(l); */
-	/* 				distance = sqrt(distance); */
-	/* 				if (distance < 1e-5){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					cobalt_up.emplace_back(Co_u); */
-	/* 					cobalt_dn.emplace_back(Co_d); */
-	/* 					copper.emplace_back(Cu); */
-	/* 					cob_cop_up.emplace_back(Cu); // In theory this will not be used */
-	/* 					cob_cop_dn.emplace_back(Cu); // In theory this will not be used */
-	/* 				} */
-	/* 				else if (distance < LH_nn_dist + 1e-3){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Co1, x, y, z); */
-	/* 					cobalt_up.emplace_back(tmp_mat); */
-	/* 					cobalt_dn.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(Cu1, x, y, z); */
-	/* 					copper.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(CoCu1, x, y, z); */
-	/* 					cob_cop_up.emplace_back(tmp_mat); */
-	/* 					cob_cop_dn.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 				else if (distance < LH_nnn_dist + 1e-3){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Co2, x, y, z); */
-	/* 					cobalt_up.emplace_back(tmp_mat); */
-	/* 					cobalt_dn.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(Cu2, x, y, z); */
-	/* 					copper.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(CoCu2, x, y, z); */
-	/* 					cob_cop_up.emplace_back(tmp_mat); */
-	/* 					cob_cop_dn.emplace_back(tmp_mat); */
-	/* 				} */
+					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*Fe_lat_oop + Fe_basis[i4];
+					distance = 0;
+					for (int l = 0; l < 3; l++)
+						distance += tmp_vec(l)*tmp_vec(l);
+					distance = sqrt(distance);
+					if (distance < 1e-5){
+						Fe_pos.emplace_back(tmp_vec);
+						iron_up.emplace_back(Fe_u);
+						iron_dn.emplace_back(Fe_d);
+					}
+					else if (distance < Fe_nn_dist + 1e-3){
+						Fe_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Fe_u1, x, y, z);
+						iron_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(Fe_d1, x, y, z);
+						iron_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Fe_nnn_dist + 1e-3){
+						Fe_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Fe_u2, x, y, z);
+						iron_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(Fe_d2, x, y, z);
+						iron_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Fe_nnnn_dist + 1e-3){
+						Fe_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(Fe_u3, x, y, z);
+						iron_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(Fe_d3, x, y, z);
+						iron_dn.emplace_back(tmp_mat);
+					}
 
-	/* 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*ins_lat_oop + ins_basis[i4]; */
-	/* 				distance = 0; */
-	/* 				for (int l = 0; l < 3; l++) */
-	/* 					distance += tmp_vec(l)*tmp_vec(l); */
-	/* 				distance = sqrt(distance); */
-	/* 				if (distance < 1e-5){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					lithium.emplace_back(Li); */
-	/* 					chloride.emplace_back(Cl); */
-	/* 					lithiumchloride.emplace_back(Cl); */
-	/* 				} */
-	/* 				else if (distance < ins_nn_dist + 1e-3){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Li1, x, y, z); */
-	/* 					lithim.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(Cl1, x, y, z); */
-	/* 					chloride.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(LiCl1, x, y, z); */
-	/* 					lithiumchloride.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 				else if (distance < ins_nnn_dist + 1e-3){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Li2, x, y, z); */
-	/* 					lithim.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(Cl2, x, y, z); */
-	/* 					chloride.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(LiCl2, x, y, z); */
-	/* 					lithiumchloride.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 				else if (distance < ins_nnnn_dist + 1e-3){ */
-	/* 					LH_pos.emplace_back(tmp_vec); */
-	/* 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); */ 
-	/* 					tmp_mat = eint1(Li3, x, y, z); */
-	/* 					lithim.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(Cl3, x, y, z); */
-	/* 					chloride.emplace_back(tmp_mat); */
-	/* 					tmp_mat = eint1(LiCl3, x, y, z); */
-	/* 					lithiumchloride.emplace_back(tmp_mat); */
-	/* 				} */
-	/* 			} */
-	/* 		} */
-	/* 	} */
-	/* } */
+					for (int i5 = 0; i5 < Au_basis.size(); i5++){
+						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[i4] - Au_basis[i5];
+						distance = 0;
+						for (int l = 0; l < 3; l++)
+							distance += tmp_vec(l)*tmp_vec(l);
+						distance = sqrt(distance);
+						if (distance < 1e-5){
+							cout<<"There probably shouldn't be anything here: Au-MgO"<<endl;
+						}
+						else if (distance < Au_MgO_nn + 1e-3){
+							Au_MgO_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(AuO1, x, y, z);
+							gold_MgO.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_MgO_nnn + 1e-3){
+							Au_MgO_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(AuMg2, x, y, z);
+							gold_MgO.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_MgO_nnnn + 1e-3){
+							Au_MgO_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(AuO3, x, y, z);
+							gold_MgO.emplace_back(tmp_mat);
+						}
+
+						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[i4] - MgO_basis[i5];
+						distance = 0;
+						for (int l = 0; l < 3; l++)
+							distance += tmp_vec(l)*tmp_vec(l);
+						distance = sqrt(distance);
+						if (distance < 1e-5){
+							cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl;
+						}
+						else if (distance < MgO_Fe_nn + 1e-3){
+							MgO_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(MgFe_u1, x, y, z);
+							iron_up_MgO.emplace_back(tmp_mat);
+							tmp_mat = eint1(MgFe_d1, x, y, z);
+							iron_dn_MgO.emplace_back(tmp_mat);
+						}
+						else if (distance < MgO_Fe_nnn + 1e-3){
+							MgO_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(MgFe_u1, x, y, z);
+							iron_up_MgO.emplace_back(tmp_mat);
+							tmp_mat = eint1(MgFe_d1, x, y, z);
+							iron_dn_MgO.emplace_back(tmp_mat);
+						}
+						else if (distance < MgO_Fe_nnnn + 1e-3){
+							MgO_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(MgFe_u1, x, y, z);
+							iron_up_MgO.emplace_back(tmp_mat);
+							tmp_mat = eint1(MgFe_d1, x, y, z);
+							iron_dn_MgO.emplace_back(tmp_mat);
+						}
+
+						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Fe_Au + Au_basis[i4] - Fe_basis[i5];
+						distance = 0;
+						for (int l = 0; l < 3; l++)
+							distance += tmp_vec(l)*tmp_vec(l);
+						distance = sqrt(distance);
+						if (distance < 1e-5){
+							cout<<"There probably shouldn't be anything here: Fe-Au"<<endl;
+						}
+						else if (distance < Au_Fe_nn + 1e-3){
+							Fe_Au_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u1, x, y, z);
+							iron_gold_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d1, x, y, z);
+							iron_gold_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_nnn + 1e-3){
+							Fe_Au_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u2, x, y, z);
+							iron_gold_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d2, x, y, z);
+							iron_gold_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_nnnn + 1e-3){
+							Fe_Au_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u3, x, y, z);
+							iron_gold_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d3, x, y, z);
+							iron_gold_dn.emplace_back(tmp_mat);
+						}
+
+						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_Fe + Fe_basis[i4] - Au_basis[i5];
+						distance = 0;
+						for (int l = 0; l < 3; l++)
+							distance += tmp_vec(l)*tmp_vec(l);
+						distance = sqrt(distance);
+						if (distance < 1e-5){
+							cout<<"There probably shouldn't be anything here: Au-Fe"<<endl;
+						}
+						else if (distance < Au_Fe_nn + 1e-3){
+							Au_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u1, x, y, z);
+							gold_iron_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d1, x, y, z);
+							gold_iron_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_nnn + 1e-3){
+							Au_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u2, x, y, z);
+							gold_iron_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d2, x, y, z);
+							gold_iron_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_nnnn + 1e-3){
+							Au_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_u3, x, y, z);
+							gold_iron_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_d3, x, y, z);
+							gold_iron_dn.emplace_back(tmp_mat);
+						}
+					}
+				}
+			}
+		}
+	}
 
       vector<string> atname;
       atname.reserve(4);
