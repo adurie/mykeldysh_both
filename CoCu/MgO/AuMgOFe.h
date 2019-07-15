@@ -141,25 +141,72 @@ Matrix<complex<double>, 9, 9> eint1(vector<double> vec, double x, double y, doub
 
 Matrix<complex<double>, 9, 9> U(int numat, int isp){
 
-      const double cshift = .575530 - .715751;
-      const double delta = 1.113608939931278e-1;
-      const double vex = delta*0.5;
+      double ryd=13.6058;
       double s0, p0, d0t, d0e;
-      //Co
-      if (numat == 1){
-        s0 =  1.12946 + cshift; // on-site
-        p0 =  1.75262 + cshift;
-        d0t =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex;
-        d0e =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex;
+      double ef=0.57553;//TODO isn't this the Papa Fermi level of Cu..?
+//    dee=2.1         //   approximately reproduces Yuassas results
+      double dee=3.5;         //   classic
+      double xmgo_shift=ef-dee/ryd;
+      //TODO Papa Fermi level of Au = 0.5380
+      if (numat == 1){//TODO need to figure out relative Fermi shifts
+       	      //     BULK Fe up:
+	      if (isp == 1){
+      		s0 =  1.13516;
+	      	p0 =  1.81739;
+      		d0t = 0.64840;
+      		d0e = 0.62960;
+	      }
+	      //     BULK Fe down:
+	      else if (isp == 0){
+      		s0 =  1.14481;
+      		p0 =  1.80769;
+      		d0t = 0.78456;
+      		d0e = 0.75661;
+	      }
+	      else
+		      cout<<"Warning, selection not recognised in function 'U'"<<endl;
       }
+      //Au
+      else if (numat == 2){
+	      s0 = 0.56220;
+	      p0 = 1.27897;
+	      d0t = 0.26097;
+	      d0e = 0.25309;
+      }
+//     Mg :
+      else if (numat == 3){	
+	      s0 = 9.88/ryd + xmgo_shift;
+	      p0 = 100. + xmgo_shift;
+	      d0t = 100. + xmgo_shift;
+	      d0e = 100. + xmgo_shift;
+      }
+//     O :
+      else if (numat == 4){
+	      s0 = 100. + xmgo_shift;
+	      p0 = -2.03/ryd + xmgo_shift;
+	      d0t = 100. + xmgo_shift;
+	      d0e = 100. + xmgo_shift;
+      }
+      else 
+	      cout<<"Warning, selection not recognised in function 'U'"<<endl;
+      /* const double cshift = .575530 - .715751; */
+      /* const double delta = 1.113608939931278e-1; */
+      /* const double vex = delta*0.5; */
+      /* //Co */
+      /* if (numat == 1){ */
+      /*   s0 =  1.12946 + cshift; // on-site */
+      /*   p0 =  1.75262 + cshift; */
+      /*   d0t =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex; */
+      /*   d0e =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex; */
+      /* } */
 
-      if (numat == 2){
-	//Cu
-        s0 =  0.79466;
-        p0 =  1.35351;
-        d0t =  0.5*(0.37307 + 0.37180);
-        d0e =  0.5*(0.37307 + 0.37180);
-      }
+      /* if (numat == 2){ */
+	/* //Cu */
+      /*   s0 =  0.79466; */
+      /*   p0 =  1.35351; */
+      /*   d0t =  0.5*(0.37307 + 0.37180); */
+      /*   d0e =  0.5*(0.37307 + 0.37180); */
+      /* } */
       Matrix<complex<double>, 9, 9> result;
       result = Matrix<complex<double>, 9, 9>::Zero();
       result(0,0) = s0;
@@ -187,72 +234,238 @@ vector<double> param(int numat, int numnn){
 	vector<double> result;
 	result.reserve(10);
 	double sss, sps, pps, ppp, sds, pds, pdp, dds, ddp, ddd;
+        double ryd=13.6058;
 
 	if (numat == 1){
-//     Co :
+//     Au :
 //     first n.n.
 
 		if (numnn == 1){
-			sss = -0.09043;   //  same atom hopping
-			sps =  0.13649;
-			pps =  0.23748;
-			ppp = -0.00142;
-			sds = -0.03806;
-			pds = -0.04069;
-			pdp =  0.02797;
-			dds = -0.04213;
-			ddp =  0.02976;
-			ddd = -0.00684;
+			sss = -0.06680;
+			pps =  0.17866;
+			ppp = -0.01645;
+			dds = -0.04971;
+			ddp =  0.02624;
+			ddd = -0.00457;
+			sps =  0.09721;
+			sds = -0.04722;
+			pds = -0.06399;
+			pdp =  0.01896;
 		}
 
 //     second n.n.
 
 		if (numnn == 2){
-			sss = -0.00337;
-			sps =  0.00135;
-			pps =  0.02849;
-			ppp =  0.01099;
-			sds = -0.01119;
-			pds = -0.01061;
-			pdp =  0.01134;
-			dds = -0.00759;
-			ddp =  0.00495;
-			ddd = -0.00016;
+			sss =  0.00277;
+			pps =  0.03707;
+			ppp = -0.01025;
+			dds = -0.00305;
+			ddp =  0.00240;
+			ddd = -0.00057;
+			sps =  0.00261;
+			sds = -0.00784;
+			pds = -0.00762;
+			pdp =  0.00470;
 		}
 	}
 
 //     -----------------------------------------------------------------
 	if (numat == 2){
-//     Cu:
+//     Fe UP:
 
 //     first n.n.
 
 		if (numnn == 1){
-			sss = -0.07518;
-			sps =  0.11571;
-			pps =  0.19669;
-			ppp =  0.01940;
-			sds = -0.03107;
-			pds = -0.03289;
-			pdp =  0.01753;
-			dds = -0.02566;
-			ddp =  0.01800;
-			ddd = -0.00408;
+		      sss = -0.12950;
+		      pps =  0.25741;
+		      ppp =  0.02422;
+		      dds = -0.04541;
+		      ddp =  0.02714;
+		      ddd = -0.00260;
+		      sps =  0.17363;
+		      sds = -0.06115;
+		      pds = -0.08485;
+		      pdp =  0.01778;
 		}
 
 //     second n.n.
 
 		if (numnn == 2){
-			sss = -0.00092;
-			sps =  0.01221;
-			pps =  0.05389;
-			ppp =  0.00846;
-			sds = -0.00852;
-			pds = -0.00536;
-			pdp =  0.00321;
-			dds = -0.00451;
-			ddp =  0.00241;
-			ddd = -0.00029;
+		      sss = -0.02915;
+		      pps =  0.16827;
+		      ppp =  0.04112;
+		      dds = -0.02713;
+		      ddp =  0.00589;
+		      ddd =  0.00060;
+		      sps =  0.06571;
+		      sds = -0.03560;
+		      pds = -0.05473;
+		      pdp = -0.00280;
+		}
+
+//     third n.n.
+
+		if (numnn == 3){
+		      sss =  0.01595;
+		      pps = -0.04985;
+		      ppp =  0.01796;
+		      dds =  0.00112;
+		      ddp =  0.00034;
+		      ddd = -0.00056;
+		      sps = -0.02477;
+		      sds = -0.00073;
+		      pds = -0.00082;
+		      pdp = -0.00241;
+		}
+	}
+
+//     -----------------------------------------------------------------
+	if (numat == 3){
+//     Fe DOWN:
+
+//     first n.n.
+
+		if (numnn == 1){
+		      sss = -0.13243;
+		      pps =  0.25911;
+		      ppp =  0.02653;
+		      dds = -0.05266;
+		      ddp =  0.03276;
+		      ddd = -0.00286;
+		      sps =  0.17278;
+		      sds = -0.07145;
+		      pds = -0.09702;
+		      pdp =  0.02129;
+		}
+
+//     second n.n.
+
+		if (numnn == 2){
+		      sss = -0.03003;
+		      pps =  0.18256;
+		      ppp =  0.03703;
+		      dds = -0.03396;
+		      ddp =  0.00581;
+		      ddd =  0.00114;
+		      sps =  0.07159;
+		      sds = -0.04075;
+		      pds = -0.06522;
+		      pdp = -0.00467;
+		}
+
+//     third n.n.
+
+		if (numnn == 3){
+		      sss =  0.01589;
+		      pps = -0.04253;
+		      ppp =  0.01538;
+		      dds =  0.00233;
+		      ddp =  0.00013;
+		      ddd = -0.00060;
+		      sps = -0.02306;
+		      sds =  0.00016;
+		      pds =  0.00222;
+		      pdp = -0.00351;
+		}
+	}
+
+//     -----------------------------------------------------------------
+	if (numat == 4){
+//     Mg:
+
+//     first n.n.
+
+		if (numnn == 1){
+		        sss = 0.;
+		        sps = 1.1/ryd;
+		        pps = 0.;
+		        ppp = 0.;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
+		}
+
+//     second n.n.
+
+		if (numnn == 2){
+		        sss =-0.18/ryd;
+		        sps = 0.;
+		        pps = 0.;
+		        ppp = 0.;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
+		}
+
+//     third n.n.
+
+		if (numnn == 3){
+		        sss = 0.;
+		        sps = 0.89/ryd;
+		        pps = 0.;
+		        ppp = 0.;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
+		}
+	}
+
+//     -----------------------------------------------------------------
+	if (numat == 5){
+//     O:
+
+//     first n.n.
+
+		if (numnn == 1){
+		        sss = 0.;
+		        sps = 1.1/ryd;
+		        pps = 0.;
+		        ppp = 0.;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
+		}
+
+//     second n.n.
+
+		if (numnn == 2){
+		        sss = 0.;
+		        sps = 0.;
+		        pps = 0.65/ryd;
+		        ppp =-0.07/ryd;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
+		}
+
+//     third n.n.
+
+		if (numnn == 3){
+		        sss = 0.;
+		        sps = 0.89/ryd;
+		        pps = 0.;
+		        ppp = 0.;
+		        sds = 0.;
+		        pds = 0.;
+		        pdp = 0.;
+		        dds = 0.;
+		        ddp = 0.;
+		        ddd = 0.;
 		}
 	}
 

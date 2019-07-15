@@ -700,7 +700,7 @@ vector<double> int_energy(variables * send) {
 	return result;
 }
 
-vector<double> switching(variables * send) {
+vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below
 	double x = send->x;
 	double z = send->z;
 	vec3 basis = *send->basis;
