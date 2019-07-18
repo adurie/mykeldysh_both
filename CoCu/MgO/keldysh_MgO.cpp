@@ -54,10 +54,18 @@ typedef struct
 		double Au_MgO_max_dist;
 		double MgO_Fe_max_dist;
 		vec3 *Au_pos;
-		vec3 *MgO_pos;
+		vec3 *MgO_pos_11;
+		vec3 *MgO_pos_12;
+		vec3 *MgO_pos_21;
 		vec3 *Fe_pos;
-		vec3 *Au_MgO_pos;
-		vec3 *MgO_Fe_pos;
+		vec3 *Au_MgO_pos_11;
+		vec3 *Au_MgO_pos_12;
+		vec3 *Au_MgO_pos_21;
+		vec3 *Au_MgO_pos_22;
+		vec3 *MgO_Fe_pos_11;
+		vec3 *MgO_Fe_pos_12;
+		vec3 *MgO_Fe_pos_21;
+		vec3 *MgO_Fe_pos_22;
 		vec3 *Au_Fe_pos;
 		vec3 *Fe_Au_pos;
 		vec3 *Fe_basis;
@@ -66,15 +74,28 @@ typedef struct
 		vM *iron_up;
 		vM *iron_dn;
 	        vM *gold;
-		vM *magnesium;
-		vM *oxide;
+		vM *magnesium_11;
+		vM *magnesium_12;
+		vM *magnesium_21;
+		vM *oxide_11;
+		vM *oxide_12;
+		vM *oxide_21;
 		vM *gold_iron_up;
 		vM *gold_iron_dn;
 		vM *iron_gold_up;
 		vM *iron_gold_dn;
-		vM *iron_dn_MgO;
-		vM *iron_up_MgO;
-		vM *gold_MgO;
+		vM *iron_dn_MgO_11;
+		vM *iron_dn_MgO_12;
+		vM *iron_dn_MgO_21;
+		vM *iron_dn_MgO_22;
+		vM *iron_up_MgO_11;
+		vM *iron_up_MgO_12;
+		vM *iron_up_MgO_21;
+		vM *iron_up_MgO_22;
+		vM *gold_MgO_11;
+		vM *gold_MgO_12;
+		vM *gold_MgO_21;
+		vM *gold_MgO_22;
 		ddmat *NM;
 		ddmat *NM_T;
 		ddmat *FM_up;
@@ -119,8 +140,8 @@ dcomp fermi(const dcomp arg, const double Ef, const double kT){
 }
 
 M9 InPlaneH(double max, const vec3 &pos, const Vector3d &basis, const vM &U, const double x, const double z){
-	double max_dist = max + 1e-4;
-	double distance;
+	/* double max_dist = max + 1e-4; */
+	/* double distance; */
 	Vector3d K;
 	dcomp i = -1;
 	i = sqrt(i);
@@ -131,11 +152,11 @@ M9 InPlaneH(double max, const vec3 &pos, const Vector3d &basis, const vM &U, con
 	for (int k = 0; k < pos.size(); k++){
 		tmp_vec = pos[k] - basis;
 		if (abs(tmp_vec(1)) < 1e-5){
-			distance = 0;
-			for (int l = 0; l < 3; l++)
-				distance += tmp_vec(l)*tmp_vec(l);
-			distance = sqrt(distance);
-			if (distance <= max_dist)
+			/* distance = 0; */
+			/* for (int l = 0; l < 3; l++) */
+			/* 	distance += tmp_vec(l)*tmp_vec(l); */
+			/* distance = sqrt(distance); */
+			/* if (distance <= max_dist) */
 				cout<<"Position vector = "<<pos[k].transpose()<<" cosine vector = "<<tmp_vec.transpose()<<endl;
 				/* result = result + U[k]*exp(i*tmp_vec.dot(K)); */
 		}
@@ -724,227 +745,227 @@ vector<double> int_energy(variables * send) {
 	return result;
 }
 
-vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below
-	double x = send->x;
-	double z = send->z;
-	vec3 Fe_basis = *send->Fe_basis;
-	vec3 Au_basis = *send->Au_basis;
-	vec3 MgO_basis = *send->MgO_basis;
-	vec3 Au_pos = *send->Au_pos;
-	vec3 MgO_pos = *send->MgO_pos;
-	vec3 Fe_pos = *send->Fe_pos;
-	vec3 Au_MgO_pos = *send->Au_MgO_pos;
-	vec3 MgO_Fe_pos = *send->MgO_Fe_pos;
-	vec3 Au_Fe_pos = *send->Au_Fe_pos;
-	vec3 Fe_Au_pos = *send->Fe_Au_pos;
-	Vector3d Au_lat_oop = *send->Au_lat_oop;
-	Vector3d Fe_lat_oop = *send->Fe_lat_oop;
-	Vector3d MgO_lat_oop = *send->MgO_lat_oop;
-	Vector3d lat_MgO_Fe = *send->lat_MgO_Fe;
-	Vector3d lat_Au_MgO = *send->lat_Au_MgO;
-	Vector3d lat_Fe_Au = *send->lat_Fe_Au;
-	Vector3d lat_Au_Fe = *send->lat_Au_Fe;
-	vM iron_up = *send->iron_up;
-	vM iron_dn = *send->iron_dn;
-	vM gold_iron_dn = *send->gold_iron_dn;
-	vM gold_iron_up = *send->gold_iron_up;
-        vM gold = *send->gold;
-	vM iron_gold_dn = *send->iron_gold_dn;
-	vM iron_gold_up = *send->iron_gold_up;
-	vM magnesium = *send->magnesium;
-	vM oxide = *send->oxide;
-	vM iron_dn_MgO = *send->iron_dn_MgO;
-	vM iron_up_MgO = *send->iron_up_MgO;
-	double Au_max_dist = send->Au_max_dist;
-	double MgO_max_dist = send->MgO_max_dist;
-	double Fe_max_dist = Fe_max_dist;
-	double Au_Fe_max_dist = Au_Fe_max_dist;
-	double Au_MgO_max_dist = Au_MgO_max_dist;
-	double MgO_Fe_max_dist = MgO_Fe_max_dist;
-	M9 ins_ii, ins_12, ins_21, ins_T_ii, ins_T_12, ins_T_21, ins_NM_12,
-	   ins_NM_21, ins_NM_T_ii, ins_NM_T_12, ins_NM_T_21, ins_FM_12,
-	   ins_FM_21, ins_FM_T_ii, ins_FM_T_12, ins_FM_T_21;
+/* vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below */
+/* 	double x = send->x; */
+/* 	double z = send->z; */
+/* 	vec3 Fe_basis = *send->Fe_basis; */
+/* 	vec3 Au_basis = *send->Au_basis; */
+/* 	vec3 MgO_basis = *send->MgO_basis; */
+/* 	vec3 Au_pos = *send->Au_pos; */
+/* 	vec3 MgO_pos = *send->MgO_pos; */
+/* 	vec3 Fe_pos = *send->Fe_pos; */
+/* 	vec3 Au_MgO_pos = *send->Au_MgO_pos; */
+/* 	vec3 MgO_Fe_pos = *send->MgO_Fe_pos; */
+/* 	vec3 Au_Fe_pos = *send->Au_Fe_pos; */
+/* 	vec3 Fe_Au_pos = *send->Fe_Au_pos; */
+/* 	Vector3d Au_lat_oop = *send->Au_lat_oop; */
+/* 	Vector3d Fe_lat_oop = *send->Fe_lat_oop; */
+/* 	Vector3d MgO_lat_oop = *send->MgO_lat_oop; */
+/* 	Vector3d lat_MgO_Fe = *send->lat_MgO_Fe; */
+/* 	Vector3d lat_Au_MgO = *send->lat_Au_MgO; */
+/* 	Vector3d lat_Fe_Au = *send->lat_Fe_Au; */
+/* 	Vector3d lat_Au_Fe = *send->lat_Au_Fe; */
+/* 	vM iron_up = *send->iron_up; */
+/* 	vM iron_dn = *send->iron_dn; */
+/* 	vM gold_iron_dn = *send->gold_iron_dn; */
+/* 	vM gold_iron_up = *send->gold_iron_up; */
+/*         vM gold = *send->gold; */
+/* 	vM iron_gold_dn = *send->iron_gold_dn; */
+/* 	vM iron_gold_up = *send->iron_gold_up; */
+/* 	vM magnesium = *send->magnesium; */
+/* 	vM oxide = *send->oxide; */
+/* 	vM iron_dn_MgO = *send->iron_dn_MgO; */
+/* 	vM iron_up_MgO = *send->iron_up_MgO; */
+/* 	double Au_max_dist = send->Au_max_dist; */
+/* 	double MgO_max_dist = send->MgO_max_dist; */
+/* 	double Fe_max_dist = Fe_max_dist; */
+/* 	double Au_Fe_max_dist = Au_Fe_max_dist; */
+/* 	double Au_MgO_max_dist = Au_MgO_max_dist; */
+/* 	double MgO_Fe_max_dist = MgO_Fe_max_dist; */
+/* 	M9 ins_ii, ins_12, ins_21, ins_T_ii, ins_T_12, ins_T_21, ins_NM_12, */
+/* 	   ins_NM_21, ins_NM_T_ii, ins_NM_T_12, ins_NM_T_21, ins_FM_12, */
+/* 	   ins_FM_21, ins_FM_T_ii, ins_FM_T_12, ins_FM_T_21; */
 
-	//generate in plane Hamiltonians for simple bilayers
-	/* ins_ii = InPlaneH(pos,  basis[0], INS, x, z); */
-	/* ins_12 = InPlaneH(pos,  basis[1], INS, x, z); */
-	/* ins_21 = InPlaneH(pos, -basis[1], INS, x, z); */
-	/* //generate hopping between simple bilayers of the same type */
-	/* ins_T_ii = InPlaneH(pos, t + basis[0], INS, x, z); */
-	/* ins_T_12 = InPlaneH(pos, t + basis[1], INS, x, z); */
-	/* ins_T_21 = InPlaneH(pos, t - basis[1], INS, x, z); */
-	//additional off diagonal Hamiltonians needed for bilayers
-	//made of different atom types
-	/* ins_NM_12 = InPlaneH(pos,  basis[1], ins_copper, x, z); */
-	/* ins_NM_21 = InPlaneH(pos, -basis[1], ins_copper, x, z); */
-	/* ins_NM_T_ii = InPlaneH(pos, t + basis[0], ins_copper, x, z); */
-	/* ins_NM_T_12 = InPlaneH(pos, t + basis[1], ins_copper, x, z); */
-	/* ins_NM_T_21 = InPlaneH(pos, t - basis[1], ins_copper, x, z); */
-	/* //TODO in this scheme so far hopping for spin up is the same as spin down */
-	/* ins_FM_12 = InPlaneH(pos,  basis[1], cob_ins_up, x, z); */
-	/* ins_FM_21 = InPlaneH(pos, -basis[1], cob_ins_up, x, z); */
-	/* ins_FM_T_ii = InPlaneH(pos, t + basis[0], cob_ins_up, x, z); */
-	/* ins_FM_T_12 = InPlaneH(pos, t + basis[1], cob_ins_up, x, z); */
-	/* ins_FM_T_21 = InPlaneH(pos, t - basis[1], cob_ins_up, x, z); */
-	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, 
-	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21,
-	   FM_T_ii, FM_T_12, FM_T_21, FM_NM_12, FM_NM_21, 
-	   FM_NM_T_ii, FM_NM_T_12, FM_NM_T_21;
-	//generate in plane Hamiltonians for simple bilayers
-	NM_ii = InPlaneH(Au_max_dist, Au_pos,  Au_basis[0], gold, x, z);
-	NM_12 = InPlaneH(Au_max_dist, Au_pos,  Au_basis[1], gold, x, z);
-	NM_21 = InPlaneH(Au_max_dist, Au_pos, -Au_basis[1], gold, x, z);
-	FM_up_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_up, x, z);
-	FM_up_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_up, x, z);
-	FM_up_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_up, x, z);
-	FM_dn_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_dn, x, z);
-	FM_dn_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_dn, x, z);
-	FM_dn_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_dn, x, z);
-	//generate hopping between simple bilayers of the same type
-	NM_T_ii = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[0], gold, x, z);
-	NM_T_12 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[1], gold, x, z);
-	NM_T_21 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop - Au_basis[1], gold, x, z);
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	FM_T_ii = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, x, z);
-	FM_T_12 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, x, z);
-	FM_T_21 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, x, z);
-	//additional off diagonal Hamiltonians needed for bilayers
-	//made of different atom types
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	FM_NM_12 = InPlaneH(pos,  basis[1], cob_cop_dn, x, z);
-	FM_NM_21 = InPlaneH(pos, -basis[1], cob_cop_dn, x, z);
-	FM_NM_T_ii = InPlaneH(pos, t + basis[0], cob_cop_dn, x, z);
-	FM_NM_T_12 = InPlaneH(pos, t + basis[1], cob_cop_dn, x, z);
-	FM_NM_T_21 = InPlaneH(pos, t - basis[1], cob_cop_dn, x, z);
+/* 	//generate in plane Hamiltonians for simple bilayers */
+/* 	/1* ins_ii = InPlaneH(pos,  basis[0], INS, x, z); *1/ */
+/* 	/1* ins_12 = InPlaneH(pos,  basis[1], INS, x, z); *1/ */
+/* 	/1* ins_21 = InPlaneH(pos, -basis[1], INS, x, z); *1/ */
+/* 	/1* //generate hopping between simple bilayers of the same type *1/ */
+/* 	/1* ins_T_ii = InPlaneH(pos, t + basis[0], INS, x, z); *1/ */
+/* 	/1* ins_T_12 = InPlaneH(pos, t + basis[1], INS, x, z); *1/ */
+/* 	/1* ins_T_21 = InPlaneH(pos, t - basis[1], INS, x, z); *1/ */
+/* 	//additional off diagonal Hamiltonians needed for bilayers */
+/* 	//made of different atom types */
+/* 	/1* ins_NM_12 = InPlaneH(pos,  basis[1], ins_copper, x, z); *1/ */
+/* 	/1* ins_NM_21 = InPlaneH(pos, -basis[1], ins_copper, x, z); *1/ */
+/* 	/1* ins_NM_T_ii = InPlaneH(pos, t + basis[0], ins_copper, x, z); *1/ */
+/* 	/1* ins_NM_T_12 = InPlaneH(pos, t + basis[1], ins_copper, x, z); *1/ */
+/* 	/1* ins_NM_T_21 = InPlaneH(pos, t - basis[1], ins_copper, x, z); *1/ */
+/* 	/1* //TODO in this scheme so far hopping for spin up is the same as spin down *1/ */
+/* 	/1* ins_FM_12 = InPlaneH(pos,  basis[1], cob_ins_up, x, z); *1/ */
+/* 	/1* ins_FM_21 = InPlaneH(pos, -basis[1], cob_ins_up, x, z); *1/ */
+/* 	/1* ins_FM_T_ii = InPlaneH(pos, t + basis[0], cob_ins_up, x, z); *1/ */
+/* 	/1* ins_FM_T_12 = InPlaneH(pos, t + basis[1], cob_ins_up, x, z); *1/ */
+/* 	/1* ins_FM_T_21 = InPlaneH(pos, t - basis[1], cob_ins_up, x, z); *1/ */
+/* 	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, */ 
+/* 	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21, */
+/* 	   FM_T_ii, FM_T_12, FM_T_21, FM_NM_12, FM_NM_21, */ 
+/* 	   FM_NM_T_ii, FM_NM_T_12, FM_NM_T_21; */
+/* 	//generate in plane Hamiltonians for simple bilayers */
+/* 	NM_ii = InPlaneH(Au_max_dist, Au_pos,  Au_basis[0], gold, x, z); */
+/* 	NM_12 = InPlaneH(Au_max_dist, Au_pos,  Au_basis[1], gold, x, z); */
+/* 	NM_21 = InPlaneH(Au_max_dist, Au_pos, -Au_basis[1], gold, x, z); */
+/* 	FM_up_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_up, x, z); */
+/* 	FM_up_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_up, x, z); */
+/* 	FM_up_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_up, x, z); */
+/* 	FM_dn_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_dn, x, z); */
+/* 	FM_dn_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_dn, x, z); */
+/* 	FM_dn_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_dn, x, z); */
+/* 	//generate hopping between simple bilayers of the same type */
+/* 	NM_T_ii = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[0], gold, x, z); */
+/* 	NM_T_12 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[1], gold, x, z); */
+/* 	NM_T_21 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop - Au_basis[1], gold, x, z); */
+/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
+/* 	FM_T_ii = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, x, z); */
+/* 	FM_T_12 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, x, z); */
+/* 	FM_T_21 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, x, z); */
+/* 	//additional off diagonal Hamiltonians needed for bilayers */
+/* 	//made of different atom types */
+/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
+/* 	FM_NM_12 = InPlaneH(pos,  basis[1], cob_cop_dn, x, z); */
+/* 	FM_NM_21 = InPlaneH(pos, -basis[1], cob_cop_dn, x, z); */
+/* 	FM_NM_T_ii = InPlaneH(pos, t + basis[0], cob_cop_dn, x, z); */
+/* 	FM_NM_T_12 = InPlaneH(pos, t + basis[1], cob_cop_dn, x, z); */
+/* 	FM_NM_T_21 = InPlaneH(pos, t - basis[1], cob_cop_dn, x, z); */
 
-	ddmat FM_up, FM_dn, NM, NM_T, FM_T, FM_NM_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2;
-	ddmat ins, ins_T, ins_NM, ins_NM_T, ins_FM, ins_FM_T;
+/* 	ddmat FM_up, FM_dn, NM, NM_T, FM_T, FM_NM_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2; */
+/* 	ddmat ins, ins_T, ins_NM, ins_NM_T, ins_FM, ins_FM_T; */
 
-	ins.topLeftCorner(9,9) = ins_ii;
-	ins.topRightCorner(9,9) = ins_12;
-	ins.bottomLeftCorner(9,9) = ins_21;
-	ins.bottomRightCorner(9,9) = ins_ii;
-	ins_T.topLeftCorner(9,9) = ins_T_ii;
-	ins_T.topRightCorner(9,9) = ins_T_12;
-	ins_T.bottomLeftCorner(9,9) = ins_T_21;
-	ins_T.bottomRightCorner(9,9) = ins_T_ii;
-	ins_NM_T.topLeftCorner(9,9) = ins_NM_T_ii;
-	ins_NM_T.topRightCorner(9,9) = ins_NM_T_12; 
-	ins_NM_T.bottomLeftCorner(9,9) = ins_NM_T_21;
-	ins_NM_T.bottomRightCorner(9,9) = ins_NM_T_ii;
-	ins_FM_T.topLeftCorner(9,9) = ins_FM_T_ii;
-	ins_FM_T.topRightCorner(9,9) = ins_FM_T_12; 
-	ins_FM_T.bottomLeftCorner(9,9) = ins_FM_T_21;
-	ins_FM_T.bottomRightCorner(9,9) = ins_FM_T_ii;
+/* 	ins.topLeftCorner(9,9) = ins_ii; */
+/* 	ins.topRightCorner(9,9) = ins_12; */
+/* 	ins.bottomLeftCorner(9,9) = ins_21; */
+/* 	ins.bottomRightCorner(9,9) = ins_ii; */
+/* 	ins_T.topLeftCorner(9,9) = ins_T_ii; */
+/* 	ins_T.topRightCorner(9,9) = ins_T_12; */
+/* 	ins_T.bottomLeftCorner(9,9) = ins_T_21; */
+/* 	ins_T.bottomRightCorner(9,9) = ins_T_ii; */
+/* 	ins_NM_T.topLeftCorner(9,9) = ins_NM_T_ii; */
+/* 	ins_NM_T.topRightCorner(9,9) = ins_NM_T_12; */ 
+/* 	ins_NM_T.bottomLeftCorner(9,9) = ins_NM_T_21; */
+/* 	ins_NM_T.bottomRightCorner(9,9) = ins_NM_T_ii; */
+/* 	ins_FM_T.topLeftCorner(9,9) = ins_FM_T_ii; */
+/* 	ins_FM_T.topRightCorner(9,9) = ins_FM_T_12; */ 
+/* 	ins_FM_T.bottomLeftCorner(9,9) = ins_FM_T_21; */
+/* 	ins_FM_T.bottomRightCorner(9,9) = ins_FM_T_ii; */
 
-	NM.topLeftCorner(9,9) = NM_ii;
-	NM.topRightCorner(9,9) = NM_12;
-	NM.bottomLeftCorner(9,9) = NM_21;
-	NM.bottomRightCorner(9,9) = NM_ii;
+/* 	NM.topLeftCorner(9,9) = NM_ii; */
+/* 	NM.topRightCorner(9,9) = NM_12; */
+/* 	NM.bottomLeftCorner(9,9) = NM_21; */
+/* 	NM.bottomRightCorner(9,9) = NM_ii; */
 
-	NM_T.topLeftCorner(9,9) = NM_T_ii;
-	NM_T.topRightCorner(9,9) = NM_T_12;
-	NM_T.bottomLeftCorner(9,9) = NM_T_21;
-	NM_T.bottomRightCorner(9,9) = NM_T_ii;
+/* 	NM_T.topLeftCorner(9,9) = NM_T_ii; */
+/* 	NM_T.topRightCorner(9,9) = NM_T_12; */
+/* 	NM_T.bottomLeftCorner(9,9) = NM_T_21; */
+/* 	NM_T.bottomRightCorner(9,9) = NM_T_ii; */
 
-	FM_up.topLeftCorner(9,9) = FM_up_ii;
-	FM_up.topRightCorner(9,9) = FM_up_12;
-	FM_up.bottomLeftCorner(9,9) = FM_up_21;
-	FM_up.bottomRightCorner(9,9) = FM_up_ii;
+/* 	FM_up.topLeftCorner(9,9) = FM_up_ii; */
+/* 	FM_up.topRightCorner(9,9) = FM_up_12; */
+/* 	FM_up.bottomLeftCorner(9,9) = FM_up_21; */
+/* 	FM_up.bottomRightCorner(9,9) = FM_up_ii; */
 
-	FM_dn.topLeftCorner(9,9) = FM_dn_ii;
-	FM_dn.topRightCorner(9,9) = FM_dn_12;
-	FM_dn.bottomLeftCorner(9,9) = FM_dn_21;
-	FM_dn.bottomRightCorner(9,9) = FM_dn_ii;
+/* 	FM_dn.topLeftCorner(9,9) = FM_dn_ii; */
+/* 	FM_dn.topRightCorner(9,9) = FM_dn_12; */
+/* 	FM_dn.bottomLeftCorner(9,9) = FM_dn_21; */
+/* 	FM_dn.bottomRightCorner(9,9) = FM_dn_ii; */
 
-	FM_T.topLeftCorner(9,9) = FM_T_ii;
-	FM_T.topRightCorner(9,9) = FM_T_12;
-	FM_T.bottomLeftCorner(9,9) = FM_T_21;
-	FM_T.bottomRightCorner(9,9) = FM_T_ii;
+/* 	FM_T.topLeftCorner(9,9) = FM_T_ii; */
+/* 	FM_T.topRightCorner(9,9) = FM_T_12; */
+/* 	FM_T.bottomLeftCorner(9,9) = FM_T_21; */
+/* 	FM_T.bottomRightCorner(9,9) = FM_T_ii; */
 
-	FM_NM_T.topLeftCorner(9,9) = FM_NM_T_ii;
-	FM_NM_T.topRightCorner(9,9) = FM_NM_T_12; 
-	FM_NM_T.bottomLeftCorner(9,9) = FM_NM_T_21;
-	FM_NM_T.bottomRightCorner(9,9) = FM_NM_T_ii;
+/* 	FM_NM_T.topLeftCorner(9,9) = FM_NM_T_ii; */
+/* 	FM_NM_T.topRightCorner(9,9) = FM_NM_T_12; */ 
+/* 	FM_NM_T.bottomLeftCorner(9,9) = FM_NM_T_21; */
+/* 	FM_NM_T.bottomRightCorner(9,9) = FM_NM_T_ii; */
 
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	odd_l1_up.topLeftCorner(9,9) = FM_up_ii;
-	odd_l1_up.topRightCorner(9,9) = FM_NM_12;
-	odd_l1_up.bottomLeftCorner(9,9) = FM_NM_21;
-	odd_l1_up.bottomRightCorner(9,9) = NM_ii;
+/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
+/* 	odd_l1_up.topLeftCorner(9,9) = FM_up_ii; */
+/* 	odd_l1_up.topRightCorner(9,9) = FM_NM_12; */
+/* 	odd_l1_up.bottomLeftCorner(9,9) = FM_NM_21; */
+/* 	odd_l1_up.bottomRightCorner(9,9) = NM_ii; */
 
-	//TODO in this scheme so far hopping for spin up is the same as spin down
-	odd_l1_dn.topLeftCorner(9,9) = FM_dn_ii;
-	odd_l1_dn.topRightCorner(9,9) = FM_NM_12;
-	odd_l1_dn.bottomLeftCorner(9,9) = FM_NM_21;
-	odd_l1_dn.bottomRightCorner(9,9) = NM_ii;
+/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
+/* 	odd_l1_dn.topLeftCorner(9,9) = FM_dn_ii; */
+/* 	odd_l1_dn.topRightCorner(9,9) = FM_NM_12; */
+/* 	odd_l1_dn.bottomLeftCorner(9,9) = FM_NM_21; */
+/* 	odd_l1_dn.bottomRightCorner(9,9) = NM_ii; */
 
-	odd_l1_T1.topLeftCorner(9,9) = FM_T_ii;
-	odd_l1_T1.topRightCorner(9,9) = FM_NM_T_12;
-	odd_l1_T1.bottomLeftCorner(9,9) = FM_T_21;
-	odd_l1_T1.bottomRightCorner(9,9) = FM_NM_T_ii;
+/* 	odd_l1_T1.topLeftCorner(9,9) = FM_T_ii; */
+/* 	odd_l1_T1.topRightCorner(9,9) = FM_NM_T_12; */
+/* 	odd_l1_T1.bottomLeftCorner(9,9) = FM_T_21; */
+/* 	odd_l1_T1.bottomRightCorner(9,9) = FM_NM_T_ii; */
 
-	odd_l1_T2.topLeftCorner(9,9) = FM_NM_T_ii;
-	odd_l1_T2.topRightCorner(9,9) = FM_NM_T_12;
-	odd_l1_T2.bottomLeftCorner(9,9) = NM_T_21;
-	odd_l1_T2.bottomRightCorner(9,9) = NM_T_ii;
+/* 	odd_l1_T2.topLeftCorner(9,9) = FM_NM_T_ii; */
+/* 	odd_l1_T2.topRightCorner(9,9) = FM_NM_T_12; */
+/* 	odd_l1_T2.bottomLeftCorner(9,9) = NM_T_21; */
+/* 	odd_l1_T2.bottomRightCorner(9,9) = NM_T_ii; */
 
-	send->NM = &NM;
-	send->NM_T = &NM_T;
-	send->FM_up = &FM_up;
-	send->FM_dn = &FM_dn;
-	send->FM_T = &FM_T;
-	send->FM_NM_T = &FM_NM_T;
-	send->odd_l1_up = &odd_l1_up;
-	send->odd_l1_dn = &odd_l1_dn;
-	send->odd_l1_T1 = &odd_l1_T1;
-	send->odd_l1_T2 = &odd_l1_T2;
-	send->ins = &ins;
-	send->ins_T = &ins_T;
-	send->ins_NM_T = &ins_NM_T;
-	send->ins_FM_T = &ins_FM_T;
+/* 	send->NM = &NM; */
+/* 	send->NM_T = &NM_T; */
+/* 	send->FM_up = &FM_up; */
+/* 	send->FM_dn = &FM_dn; */
+/* 	send->FM_T = &FM_T; */
+/* 	send->FM_NM_T = &FM_NM_T; */
+/* 	send->odd_l1_up = &odd_l1_up; */
+/* 	send->odd_l1_dn = &odd_l1_dn; */
+/* 	send->odd_l1_T1 = &odd_l1_T1; */
+/* 	send->odd_l1_T2 = &odd_l1_T2; */
+/* 	send->ins = &ins; */
+/* 	send->ins_T = &ins_T; */
+/* 	send->ins_NM_T = &ins_NM_T; */
+/* 	send->ins_FM_T = &ins_FM_T; */
 
-	vector<double> result1, result2, integrate;
-	int N = send->N;
-	double V = send->V;
-	result1.reserve(N);
-	if (abs(V) > 1e-9)
-		result1 = int_energy(send);
-	else {
-		for (int l = 0; l < N; l++)
-			result1[l] = 0.;
-	}
-	integrate.reserve(N);
-	result2.reserve(N);
-	for (int l = 0; l < N; l++)
-		result2[l] = 0.;
-	dcomp i;
-	i = -1.;
-	i = sqrt(i);
-	dcomp E = 0.;
-	double kT = send->kT;
-	for (int j=0; j!=15; j++){
-		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
-		integrate = int_theta(E, send);
-		if (abs(V) < 1e-9){
-			for (int l = 0; l < N; l++)
-				result2[l] += 2.*kT*integrate[l]; 
-		}
-		else {
-			for (int l = 0; l < N; l++)
-				result2[l] += kT*integrate[l]; 
-			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i;
-			integrate = int_theta(E, send);
-			for (int l = 0; l < N; l++)
-				result2[l] += kT*integrate[l]; 
-		}
-	}
-	vector<double> total;
-	total.reserve(N);
-	for (int l = 0; l < N; l++)
-		total[l] = result1[l] + result2[l];
-	return total;
-}
+/* 	vector<double> result1, result2, integrate; */
+/* 	int N = send->N; */
+/* 	double V = send->V; */
+/* 	result1.reserve(N); */
+/* 	if (abs(V) > 1e-9) */
+/* 		result1 = int_energy(send); */
+/* 	else { */
+/* 		for (int l = 0; l < N; l++) */
+/* 			result1[l] = 0.; */
+/* 	} */
+/* 	integrate.reserve(N); */
+/* 	result2.reserve(N); */
+/* 	for (int l = 0; l < N; l++) */
+/* 		result2[l] = 0.; */
+/* 	dcomp i; */
+/* 	i = -1.; */
+/* 	i = sqrt(i); */
+/* 	dcomp E = 0.; */
+/* 	double kT = send->kT; */
+/* 	for (int j=0; j!=15; j++){ */
+/* 		E = send->Ef + (2.*j + 1.)*kT*M_PI*i; */
+/* 		integrate = int_theta(E, send); */
+/* 		if (abs(V) < 1e-9){ */
+/* 			for (int l = 0; l < N; l++) */
+/* 				result2[l] += 2.*kT*integrate[l]; */ 
+/* 		} */
+/* 		else { */
+/* 			for (int l = 0; l < N; l++) */
+/* 				result2[l] += kT*integrate[l]; */ 
+/* 			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i; */
+/* 			integrate = int_theta(E, send); */
+/* 			for (int l = 0; l < N; l++) */
+/* 				result2[l] += kT*integrate[l]; */ 
+/* 		} */
+/* 	} */
+/* 	vector<double> total; */
+/* 	total.reserve(N); */
+/* 	for (int l = 0; l < N; l++) */
+/* 		total[l] = result1[l] + result2[l]; */
+/* 	return total; */
+/* } */
 
 int main() 
 {
@@ -1062,7 +1083,7 @@ int main()
 	MgO_basis.emplace_back(MgO_bas2);
 	//This section defines the out of plane lattice vector
 	Vector3d MgO_lat_oop;
-	MgO_lat_oop << 0.5, 0.5, 0;
+	MgO_lat_oop << 0.5, 0.5, 0;//TODO question mark as to whether the cosine vectors for T are correct e.g. -1.5, 0, 0.5 
 	//Distance information for n.n and n.n.n
 	double MgO_nn_dist, MgO_nnn_dist, MgO_nnnn_dist;
 	MgO_nn_dist = 0.5;
@@ -1112,20 +1133,138 @@ int main()
 	X << 1, 0, 0;
 	Y << 0, 1, 0;
 	Z << 0, 0, 1;
-	vM iron_up, iron_dn, gold, iron_gold_up, iron_gold_dn, gold_MgO, magnesium, oxide, iron_up_MgO, iron_dn_MgO,
-	   gold_iron_up, gold_iron_dn;
-	vec3 Au_pos, MgO_pos, Fe_pos, Au_MgO_pos, MgO_Fe_pos, Au_Fe_pos, Fe_Au_pos;
-	Au_pos.reserve(19); Fe_pos.reserve(19); MgO_pos.reserve(19); Au_MgO_pos.reserve(19); MgO_Fe_pos.reserve(19);
+	vM iron_up, iron_dn, gold, iron_gold_up, iron_gold_dn, gold_MgO_11, gold_MgO_12, gold_MgO_21, gold_MgO_22, 
+	   magnesium_11, magnesium_12, magnesium_21, oxide_11, oxide_12, oxide_21, iron_up_MgO_11, iron_up_MgO_12, 
+	   iron_up_MgO_21, iron_up_MgO_22, iron_dn_MgO_11, iron_dn_MgO_12, iron_dn_MgO_21, iron_dn_MgO_22, gold_iron_up, gold_iron_dn;
+	vec3 Au_pos, MgO_pos_11, MgO_pos_12, MgO_pos_21, Fe_pos, Au_MgO_pos_11, MgO_Fe_pos_11, Au_MgO_pos_12, MgO_Fe_pos_12, Au_MgO_pos_21, 
+	     MgO_Fe_pos_21, Au_MgO_pos_22, MgO_Fe_pos_22, Au_Fe_pos, Fe_Au_pos;
+	Au_pos.reserve(19); Fe_pos.reserve(19);
 	Au_Fe_pos.reserve(19); Fe_Au_pos.reserve(19);
 	iron_up.reserve(19); iron_dn.reserve(19); gold.reserve(19); iron_gold_up.reserve(19); iron_gold_dn.reserve(19);
-	gold_MgO.reserve(19); magnesium.reserve(19); oxide.reserve(19); iron_up_MgO.reserve(19); iron_dn_MgO.reserve(19);
 	gold_iron_up.reserve(19); gold_iron_dn.reserve(19);
 	//magic 19 above is num onsite + num nn + num nnn = 1 + 12 + 6
 	Matrix<dcomp, 9, 9> tmp_mat;
 	double distance;
-	for (int i1 = -1; i1 < 2; i1++){
-		for (int i2 = -1; i2 < 2; i2++){
+	for (int i1 = -2; i1 < 3; i1++){
+		for (int i2 = -2; i2 < 3; i2++){
 			for (int i3 = -1; i3 < 2; i3++){
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[0];
+				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_pos_11.emplace_back(tmp_vec);
+					oxide_11.emplace_back(O);
+					magnesium_11.emplace_back(Mg);
+				}
+				else if (distance < MgO_nn_dist + 1e-3){
+					MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg1, x, y, z);
+					oxide_11.emplace_back(tmp_mat);
+					magnesium_11.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnn_dist + 1e-3){
+					MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg_O2, x, y, z);
+					oxide_11.emplace_back(tmp_mat);
+					magnesium_11.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnnn_dist + 1e-3){
+					MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg3, x, y, z);
+					oxide_11.emplace_back(tmp_mat);
+					magnesium_11.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[1];
+				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_pos_12.emplace_back(tmp_vec);
+					oxide_12.emplace_back(O);
+					magnesium_12.emplace_back(Mg);
+				}
+				else if (distance < MgO_nn_dist + 1e-3){
+					MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg1, x, y, z);
+					oxide_12.emplace_back(tmp_mat);
+					magnesium_12.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnn_dist + 1e-3){
+					MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg_O2, x, y, z);
+					oxide_12.emplace_back(tmp_mat);
+					magnesium_12.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnnn_dist + 1e-3){
+					MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg3, x, y, z);
+					oxide_12.emplace_back(tmp_mat);
+					magnesium_12.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop - MgO_basis[1];
+				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_pos_21.emplace_back(tmp_vec);
+					oxide_21.emplace_back(O);
+					magnesium_21.emplace_back(Mg);
+				}
+				else if (distance < MgO_nn_dist + 1e-3){
+					MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg1, x, y, z);
+					oxide_21.emplace_back(tmp_mat);
+					magnesium_21.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnn_dist + 1e-3){
+					MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg_O2, x, y, z);
+					oxide_21.emplace_back(tmp_mat);
+					magnesium_21.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_nnnn_dist + 1e-3){
+					MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(Mg3, x, y, z);
+					oxide_21.emplace_back(tmp_mat);
+					magnesium_21.emplace_back(tmp_mat);
+				}
+
 				for (int i4 = 0; i4 < Au_basis.size(); i4++){
 					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*Au_lat_oop + Au_basis[i4];
 					distance = 0;
@@ -1151,44 +1290,6 @@ int main()
 						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 						tmp_mat = eint1(Au2, x, y, z);
 						gold.emplace_back(tmp_mat);
-					}
-
-					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[i4];
-					distance = 0;
-					for (int l = 0; l < 3; l++)
-						distance += tmp_vec(l)*tmp_vec(l);
-					distance = sqrt(distance);
-					if (distance < 1e-5){
-						MgO_pos.emplace_back(tmp_vec);
-						oxide.emplace_back(O);
-						magnesium.emplace_back(Mg);
-					}
-					else if (distance < MgO_nn_dist + 1e-3){
-						MgO_pos.emplace_back(tmp_vec);
-						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						tmp_mat = eint1(Mg1, x, y, z);
-						oxide.emplace_back(tmp_mat);
-						magnesium.emplace_back(tmp_mat);
-					}
-					else if (distance < MgO_nnn_dist + 1e-3){
-						MgO_pos.emplace_back(tmp_vec);
-						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						tmp_mat = eint1(Mg_O2, x, y, z);
-						oxide.emplace_back(tmp_mat);
-						magnesium.emplace_back(tmp_mat);
-					}
-					else if (distance < MgO_nnnn_dist + 1e-3){
-						MgO_pos.emplace_back(tmp_vec);
-						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-						tmp_mat = eint1(Mg3, x, y, z);
-						oxide.emplace_back(tmp_mat);
-						magnesium.emplace_back(tmp_mat);
 					}
 
 					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*Fe_lat_oop + Fe_basis[i4];
@@ -1233,86 +1334,6 @@ int main()
 					}
 
 					for (int i5 = 0; i5 < Au_basis.size(); i5++){
-						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[i4] - Au_basis[i5];
-						distance = 0;
-						for (int l = 0; l < 3; l++)
-							distance += tmp_vec(l)*tmp_vec(l);
-						distance = sqrt(distance);
-						if (distance < 1e-5){
-							Au_MgO_pos.emplace_back(tmp_vec);
-							/* cout<<"There probably shouldn't be anything here: Au-MgO"<<endl; */
-							tmp_mat = eint1(AuO1, x, y, z);
-							gold_MgO.emplace_back(tmp_mat);
-						}
-						else if (distance < Au_MgO_nn + 1e-3){
-							Au_MgO_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(AuO1, x, y, z);
-							gold_MgO.emplace_back(tmp_mat);
-						}
-						else if (distance < Au_MgO_nnn + 1e-3){
-							Au_MgO_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(AuMg2, x, y, z);
-							gold_MgO.emplace_back(tmp_mat);
-						}
-						else if (distance < Au_MgO_nnnn + 1e-3){
-							Au_MgO_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(AuO3, x, y, z);
-							gold_MgO.emplace_back(tmp_mat);
-						}
-
-						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[i4] - MgO_basis[i5];
-						distance = 0;
-						for (int l = 0; l < 3; l++)
-							distance += tmp_vec(l)*tmp_vec(l);
-						distance = sqrt(distance);
-						if (distance < 1e-5){
-							MgO_Fe_pos.emplace_back(tmp_vec);
-							tmp_mat = eint1(MgFe_u1, x, y, z);
-							iron_up_MgO.emplace_back(tmp_mat);
-							tmp_mat = eint1(MgFe_d1, x, y, z);
-							iron_dn_MgO.emplace_back(tmp_mat);
-							/* cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl; */
-						}
-						else if (distance < MgO_Fe_nn + 1e-3){
-							MgO_Fe_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(MgFe_u1, x, y, z);
-							iron_up_MgO.emplace_back(tmp_mat);
-							tmp_mat = eint1(MgFe_d1, x, y, z);
-							iron_dn_MgO.emplace_back(tmp_mat);
-						}
-						else if (distance < MgO_Fe_nnn + 1e-3){
-							MgO_Fe_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(MgFe_u1, x, y, z);
-							iron_up_MgO.emplace_back(tmp_mat);
-							tmp_mat = eint1(MgFe_d1, x, y, z);
-							iron_dn_MgO.emplace_back(tmp_mat);
-						}
-						else if (distance < MgO_Fe_nnnn + 1e-3){
-							MgO_Fe_pos.emplace_back(tmp_vec);
-							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-							tmp_mat = eint1(MgFe_u1, x, y, z);
-							iron_up_MgO.emplace_back(tmp_mat);
-							tmp_mat = eint1(MgFe_d1, x, y, z);
-							iron_dn_MgO.emplace_back(tmp_mat);
-						}
-
 						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Fe_Au + Au_basis[i4] - Fe_basis[i5];
 						distance = 0;
 						for (int l = 0; l < 3; l++)
@@ -1402,35 +1423,442 @@ int main()
 						}
 					}
 				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[0] - Au_basis[0];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					Au_MgO_pos_11.emplace_back(tmp_vec);
+					/* cout<<"There probably shouldn't be anything here: Au-MgO"<<endl; */
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_11.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nn + 1e-3){
+					Au_MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_11.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnn + 1e-3){
+					Au_MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuMg2, x, y, z);
+					gold_MgO_11.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnnn + 1e-3){
+					Au_MgO_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO3, x, y, z);
+					gold_MgO_11.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[0] - MgO_basis[0];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_Fe_pos_11.emplace_back(tmp_vec);
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_11.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_11.emplace_back(tmp_mat);
+					/* cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl; */
+				}
+				else if (distance < MgO_Fe_nn + 1e-3){
+					MgO_Fe_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_11.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_11.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnn + 1e-3){
+					MgO_Fe_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_11.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_11.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnnn + 1e-3){
+					MgO_Fe_pos_11.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_11.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_11.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[1] - Au_basis[0];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					Au_MgO_pos_12.emplace_back(tmp_vec);
+					/* cout<<"There probably shouldn't be anything here: Au-MgO"<<endl; */
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_12.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nn + 1e-3){
+					Au_MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_12.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnn + 1e-3){
+					Au_MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuMg2, x, y, z);
+					gold_MgO_12.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnnn + 1e-3){
+					Au_MgO_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO3, x, y, z);
+					gold_MgO_12.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[1] - MgO_basis[0];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_Fe_pos_12.emplace_back(tmp_vec);
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_12.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_12.emplace_back(tmp_mat);
+					/* cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl; */
+				}
+				else if (distance < MgO_Fe_nn + 1e-3){
+					MgO_Fe_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_12.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_12.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnn + 1e-3){
+					MgO_Fe_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_12.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_12.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnnn + 1e-3){
+					MgO_Fe_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_12.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_12.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[0] - Au_basis[1];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					Au_MgO_pos_21.emplace_back(tmp_vec);
+					/* cout<<"There probably shouldn't be anything here: Au-MgO"<<endl; */
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_21.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nn + 1e-3){
+					Au_MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_21.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnn + 1e-3){
+				cout<<tmp_vec.transpose()<<endl;
+					Au_MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuMg2, x, y, z);
+					gold_MgO_21.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnnn + 1e-3){
+					Au_MgO_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO3, x, y, z);
+					gold_MgO_21.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[0] - MgO_basis[1];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_Fe_pos_21.emplace_back(tmp_vec);
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_21.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_21.emplace_back(tmp_mat);
+					/* cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl; */
+				}
+				else if (distance < MgO_Fe_nn + 1e-3){
+					MgO_Fe_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_21.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_21.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnn + 1e-3){
+					MgO_Fe_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_21.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_21.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnnn + 1e-3){
+					MgO_Fe_pos_21.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_21.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_21.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Au_MgO + MgO_basis[1] - Au_basis[1];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					Au_MgO_pos_22.emplace_back(tmp_vec);
+					/* cout<<"There probably shouldn't be anything here: Au-MgO"<<endl; */
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nn + 1e-3){
+					Au_MgO_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO1, x, y, z);
+					gold_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnn + 1e-3){
+					Au_MgO_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuMg2, x, y, z);
+					gold_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < Au_MgO_nnnn + 1e-3){
+					Au_MgO_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(AuO3, x, y, z);
+					gold_MgO_22.emplace_back(tmp_mat);
+				}
+
+				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_MgO_Fe + Fe_basis[1] - MgO_basis[1];
+				distance = 0;
+				for (int l = 0; l < 3; l++)
+					distance += tmp_vec(l)*tmp_vec(l);
+				distance = sqrt(distance);
+				if (distance < 1e-5){
+					MgO_Fe_pos_22.emplace_back(tmp_vec);
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_22.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_22.emplace_back(tmp_mat);
+					/* cout<<"There probably shouldn't be anything here: MgO-Fe"<<endl; */
+				}
+				else if (distance < MgO_Fe_nn + 1e-3){
+					MgO_Fe_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_22.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnn + 1e-3){
+					MgO_Fe_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_22.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_nnnn + 1e-3){
+					MgO_Fe_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_u1, x, y, z);
+					iron_up_MgO_22.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_d1, x, y, z);
+					iron_dn_MgO_22.emplace_back(tmp_mat);
+				}
 			}
 		}
 	}
 
-	/* cout<<"Fe - Au topLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au topRight"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
+	cout<<"MgO topLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_11, MgO_basis[0], oxide_11, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO topRight"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_12, MgO_basis[1], oxide_12, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO bottomLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_21,  - MgO_basis[1], oxide_21, 2.53, 2.53);
+	cout<<endl;
 
-	/* cout<<"Au - Fe topLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe topRight"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
+	cout<<"MgO topLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_11, MgO_lat_oop + MgO_basis[0], oxide_11, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO topRight"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_12, MgO_lat_oop + MgO_basis[1], oxide_12, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO bottomLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_21, MgO_lat_oop - MgO_basis[1], oxide_21, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Au topLeft"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_basis[0], gold, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au topRight"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_basis[1], gold, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, - Au_basis[1], gold, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Au topLeft"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop + Au_basis[0], gold, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au topRight"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop + Au_basis[1], gold, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop - Au_basis[1], gold, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Fe topLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_basis[0], iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe topRight"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_basis[1], iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, - Fe_basis[1], iron_up, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Fe topLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe topRight"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Fe - Au topLeft"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe - Au topRight"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe - Au bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe - Au bottomRight"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Au - Fe topLeft"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - Fe topRight"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - Fe bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - Fe bottomRight"<<endl;
+	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"MgO - Fe topLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_11, lat_MgO_Fe - MgO_basis[0] + Fe_basis[0], iron_up_MgO_11, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO - Fe topRight"<<endl;
+	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_12, lat_MgO_Fe - MgO_basis[0] + Fe_basis[1], iron_up_MgO_12, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO - Fe bottomLeft"<<endl;
+	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_21, lat_MgO_Fe - MgO_basis[1] + Fe_basis[0], iron_up_MgO_21, 2.53, 2.53);
+	cout<<endl;
+	cout<<"MgO - Fe bottomRight"<<endl;
+	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_22, lat_MgO_Fe - MgO_basis[1] + Fe_basis[1], iron_up_MgO_22, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Au - MgO topLeft"<<endl;
+	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_11, lat_Au_MgO + MgO_basis[0] - Au_basis[0], gold_MgO_11, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - MgO topRight"<<endl;
+	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_12, lat_Au_MgO + MgO_basis[1] - Au_basis[0], gold_MgO_12, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - MgO bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_21, lat_Au_MgO + MgO_basis[0] - Au_basis[1], gold_MgO_21, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Au - MgO bottomRight"<<endl;
+	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_22, lat_Au_MgO + MgO_basis[1] - Au_basis[1], gold_MgO_22, 2.53, 2.53);
+	cout<<endl;
 
       vector<string> atname;
       atname.reserve(4);
@@ -1568,10 +1996,18 @@ int main()
 	send.Au_MgO_max_dist = Au_MgO_nnnn;
 	send.MgO_Fe_max_dist = MgO_Fe_nnnn;
 	send.Au_pos = &Au_pos;
-	send.MgO_pos = &MgO_pos;
+	send.MgO_pos_11 = &MgO_pos_11;
+	send.MgO_pos_12 = &MgO_pos_12;
+	send.MgO_pos_21 = &MgO_pos_21;
 	send.Fe_pos = &Fe_pos;
-	send.Au_MgO_pos = &Au_MgO_pos;
-	send.MgO_Fe_pos = &MgO_Fe_pos;
+	send.Au_MgO_pos_11 = &Au_MgO_pos_11;
+	send.Au_MgO_pos_12 = &Au_MgO_pos_12;
+	send.Au_MgO_pos_21 = &Au_MgO_pos_21;
+	send.Au_MgO_pos_22 = &Au_MgO_pos_22;
+	send.MgO_Fe_pos_11 = &MgO_Fe_pos_11;
+	send.MgO_Fe_pos_12 = &MgO_Fe_pos_12;
+	send.MgO_Fe_pos_21 = &MgO_Fe_pos_21;
+	send.MgO_Fe_pos_22 = &MgO_Fe_pos_22;
 	send.Fe_Au_pos = &Fe_Au_pos;
 	send.Au_Fe_pos = &Au_Fe_pos;
 	send.Au_basis = &Au_basis;
@@ -1580,15 +2016,28 @@ int main()
 	send.gold = &gold;
 	send.iron_up = &iron_up;
 	send.iron_dn = &iron_dn;
-	send.magnesium = &magnesium;
-	send.oxide = &oxide;
+	send.magnesium_11 = &magnesium_11;
+	send.magnesium_12 = &magnesium_12;
+	send.magnesium_21 = &magnesium_21;
+	send.oxide_11 = &oxide_11;
+	send.oxide_21 = &oxide_21;
+	send.oxide_12 = &oxide_12;
 	send.gold_iron_up = &gold_iron_up;
 	send.gold_iron_dn = &gold_iron_dn;
 	send.iron_gold_up = &iron_gold_up;
 	send.iron_gold_dn = &iron_gold_dn;
-	send.iron_dn_MgO = &iron_dn_MgO;
-	send.iron_up_MgO = &iron_up_MgO;
-	send.gold_MgO = &gold_MgO;
+	send.iron_dn_MgO_11 = &iron_dn_MgO_11;
+	send.iron_dn_MgO_12 = &iron_dn_MgO_12;
+	send.iron_dn_MgO_21 = &iron_dn_MgO_21;
+	send.iron_dn_MgO_22 = &iron_dn_MgO_22;
+	send.iron_up_MgO_11 = &iron_up_MgO_11;
+	send.iron_up_MgO_12 = &iron_up_MgO_12;
+	send.iron_up_MgO_21 = &iron_up_MgO_21;
+	send.iron_up_MgO_22 = &iron_up_MgO_22;
+	send.gold_MgO_11 = &gold_MgO_11;
+	send.gold_MgO_12 = &gold_MgO_12;
+	send.gold_MgO_21 = &gold_MgO_21;
+	send.gold_MgO_22 = &gold_MgO_22;
 	send.V = V;
 	send.lim = lim;
 	send.lim2 = lim2;
