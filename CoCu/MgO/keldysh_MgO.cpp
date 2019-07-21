@@ -47,12 +47,6 @@ typedef struct
 		Vector3d *lat_MgO_Fe;
 		Vector3d *lat_Fe_Au;
 		Vector3d *lat_Au_Fe;
-		double Au_max_dist;
-		double MgO_max_dist;
-		double Fe_max_dist;
-		double Au_Fe_max_dist;
-		double Au_MgO_max_dist;
-		double MgO_Fe_max_dist;
 		vec3 *Au_pos;
 		vec3 *MgO_pos_11;
 		vec3 *MgO_pos_12;
@@ -100,16 +94,24 @@ typedef struct
 		ddmat *NM_T;
 		ddmat *FM_up;
 		ddmat *FM_dn;
-		ddmat *FM_T;
-		ddmat *FM_NM_T;
+		ddmat *FM_up_T;
+		ddmat *FM_dn_T;
+		ddmat *FM_NM_up_T;
+		ddmat *FM_NM_dn_T;
+		ddmat *NM_FM_up_T;
+		ddmat *NM_FM_dn_T;
 		ddmat *odd_l1_up;
 		ddmat *odd_l1_dn;
-		ddmat *odd_l1_T1;
-		ddmat *odd_l1_T2;
+		ddmat *odd_l1_up_T1;
+		ddmat *odd_l1_up_T2;
+		ddmat *odd_l1_dn_T1;
+		ddmat *odd_l1_dn_T2;
 		ddmat *ins;
 		ddmat *ins_T;
-		ddmat *ins_FM_T;
+		ddmat *ins_FM_up_T;
+		ddmat *ins_FM_dn_T;
 		ddmat *ins_NM_T;
+
 
 	}
 variables;
@@ -139,7 +141,7 @@ dcomp fermi(const dcomp arg, const double Ef, const double kT){
 	return 1./(1.+exp((arg-Ef)/kT));
 }
 
-M9 InPlaneH(double max, const vec3 &pos, const Vector3d &basis, const vM &U, const double x, const double z){
+M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x, const double z){
 	/* double max_dist = max + 1e-4; */
 	/* double distance; */
 	Vector3d K;
@@ -321,7 +323,7 @@ void f(double * spincurrent, const double theta, const dcomp E, int k, Integer *
 	NMbig.bottomRightCorner(18,18) = NM;
 	//adlayer one bilayer onto RHS G to ensure gmean is correct
 	//this means 2 layers are on before we begin!
-	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();
+	GR = (OMbig - (NMbig - V*Ibig)-Tmean*GR*Tmeandagg).inverse();//TODO would it be correct to adlayer on GR and then rotate..? surely yes due to no magnetism in the spacer..
 	GR_dagg = GR.adjoint();
 
 	dddmat Pauli;//This is the y Pauli sigma Matrix
@@ -395,15 +397,20 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	ddmat FM_dn = *send->FM_dn;
 	ddmat NM = *send->NM;
 	ddmat NM_T = *send->NM_T;
-	ddmat FM_T = *send->FM_T;
-	ddmat FM_NM_T = *send->FM_NM_T;
+	ddmat FM_up_T = *send->FM_up_T;
+	ddmat FM_dn_T = *send->FM_dn_T;
+	ddmat FM_NM_up_T = *send->FM_NM_up_T;
+	ddmat FM_NM_dn_T = *send->FM_NM_dn_T;
 	ddmat odd_l1_up = *send->odd_l1_up;
 	ddmat odd_l1_dn = *send->odd_l1_dn;
-	ddmat odd_l1_T1 = *send->odd_l1_T1;
-	ddmat odd_l1_T2 = *send->odd_l1_T2;
+	ddmat odd_l1_up_T1 = *send->odd_l1_up_T1;
+	ddmat odd_l1_dn_T1 = *send->odd_l1_dn_T1;
+	ddmat odd_l1_up_T2 = *send->odd_l1_up_T2;
+	ddmat odd_l1_dn_T2 = *send->odd_l1_dn_T2;
 	ddmat ins = *send->ins;
 	ddmat ins_T = *send->ins_T;
-	ddmat ins_FM_T = *send->ins_FM_T;
+	ddmat ins_FM_up_T = *send->ins_FM_up_T;
+	ddmat ins_FM_dn_T = *send->ins_FM_dn_T;
 	ddmat ins_NM_T = *send->ins_NM_T;
 	/* cout<<NM<<endl<<endl; */
 	double V = send->V;
@@ -413,10 +420,12 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	ddmat OMdn=E*I-(FM_dn - V*I);
 	ddmat OM = E*I;
 
-	ddmat FM_T_dagg = FM_T.adjoint();
-	ddmat GR_up = gs(OMup, FM_T_dagg);
-	ddmat GR_dn = gs(OMdn, FM_T_dagg);
-	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
+	ddmat FM_up_T_dagg = FM_up_T.adjoint();
+	ddmat FM_dn_T_dagg = FM_dn_T.adjoint();
+	ddmat GR_up = gs(OMup, FM_up_T_dagg);
+	ddmat GR_dn = gs(OMdn, FM_dn_T_dagg);
+	ddmat FM_NM_up_T_dagg = FM_NM_up_T.adjoint();
+	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
 	ddmat NM_T_dagg = NM_T.adjoint();
 	
 	/* //this for trilayer */
@@ -431,12 +440,10 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	const int lim = send->lim;
 	const int lim2 = send->lim2;
 	ddmat ins_T_dagg = ins_T.adjoint();
-	M9 Ismall = M9::Identity();
 	ddmat ins_NM_T_dagg = ins_NM_T.adjoint();
 //build thickness of layer 2 to lim layers
 	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites
-		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));//TODO changed this so that full bias isn't on last layer so if lim = 1
-		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));// then shift = 0, 1/2 (so 1 falls on next layer)
+		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer)
 		if (it == 0){
 			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
 			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
@@ -449,31 +456,29 @@ vector<double> int_theta(const dcomp E, variables * send) {
 //lim2 is thickness of layer 3
 //build thickness of layer 3 to lim2 layers
 //add 10 bilayers i.e. 20 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -ins_FM_T.adjoint()*GL_up_even*ins_FM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_T.adjoint()*GL_dn_even*ins_FM_T).inverse();
+	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse();
+	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse();
 	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
+		GL_up_even = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up_even*FM_up_T).inverse();
+		GL_dn_even = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn_even*FM_dn_T).inverse();
 	}
 
 	ddmat GL_up_odd = GL_up_even;
 	ddmat GL_dn_odd = GL_dn_even;
-	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
-	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
+	ddmat odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint();
+	ddmat odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint();
+	ddmat odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint();
+	ddmat odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint();
 	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
 	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
+	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse();
+	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse();
 	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
 	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
-	dddmat GR;
-	GR.fill(0.);
-	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomRightCorner(18,18) = GR_dn;
+	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse();
+	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse();
+	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse();
+	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse();
 	int N = send->N;
 	result.reserve(N);
 	integrate.reserve(N);
@@ -487,7 +492,7 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	/* const int n = 1; */
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
-		integrate = f_vec(theta, E, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR);
+		integrate = f_vec(theta, E, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
 		for (int i = 0; i < N; i++){
 			if ((k==0)||(k==n))
 				result[i] += M_PI*(0.5/n)*integrate[i];
@@ -506,15 +511,20 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	ddmat FM_dn = *send->FM_dn;
 	ddmat NM = *send->NM;
 	ddmat NM_T = *send->NM_T;
-	ddmat FM_T = *send->FM_T;
-	ddmat FM_NM_T = *send->FM_NM_T;
+	ddmat FM_up_T = *send->FM_up_T;
+	ddmat FM_dn_T = *send->FM_dn_T;
+	ddmat FM_NM_up_T = *send->FM_NM_up_T;
+	ddmat FM_NM_dn_T = *send->FM_NM_dn_T;
 	ddmat odd_l1_up = *send->odd_l1_up;
 	ddmat odd_l1_dn = *send->odd_l1_dn;
-	ddmat odd_l1_T1 = *send->odd_l1_T1;
-	ddmat odd_l1_T2 = *send->odd_l1_T2;
+	ddmat odd_l1_up_T1 = *send->odd_l1_up_T1;
+	ddmat odd_l1_dn_T1 = *send->odd_l1_dn_T1;
+	ddmat odd_l1_up_T2 = *send->odd_l1_up_T2;
+	ddmat odd_l1_dn_T2 = *send->odd_l1_dn_T2;
 	ddmat ins = *send->ins;
 	ddmat ins_T = *send->ins_T;
-	ddmat ins_FM_T = *send->ins_FM_T;
+	ddmat ins_FM_up_T = *send->ins_FM_up_T;
+	ddmat ins_FM_dn_T = *send->ins_FM_dn_T;
 	ddmat ins_NM_T = *send->ins_NM_T;
 	/* cout<<NM<<endl<<endl; */
 	double V = send->V;
@@ -524,10 +534,12 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	ddmat OMdn=E*I-(FM_dn - V*I);
 	ddmat OM = E*I;
 
-	ddmat FM_T_dagg = FM_T.adjoint();
-	ddmat GR_up = gs(OMup, FM_T_dagg);
-	ddmat GR_dn = gs(OMdn, FM_T_dagg);
-	ddmat FM_NM_T_dagg = FM_NM_T.adjoint();
+	ddmat FM_up_T_dagg = FM_up_T.adjoint();
+	ddmat FM_dn_T_dagg = FM_dn_T.adjoint();
+	ddmat GR_up = gs(OMup, FM_up_T_dagg);
+	ddmat GR_dn = gs(OMdn, FM_dn_T_dagg);
+	ddmat FM_NM_up_T_dagg = FM_NM_up_T.adjoint();
+	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
 	ddmat NM_T_dagg = NM_T.adjoint();
 	
 	/* //this for trilayer */
@@ -542,12 +554,10 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	const int lim = send->lim;
 	double lim2 = send->lim2;
 	ddmat ins_T_dagg = ins_T.adjoint();
-	M9 Ismall = M9::Identity();
 	ddmat ins_NM_T_dagg = ins_NM_T.adjoint();
 //build thickness of layer 2 to lim layers
 	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites
-		ins.topLeftCorner(9,9) = ins.topLeftCorner(9,9) - Ismall*(V*2.*it/(lim*2.));//TODO changed this so that full bias isn't on last layer so if lim = 1
-		ins.bottomRightCorner(9,9) = ins.bottomRightCorner(9,9) - Ismall*(V*(2.*it + 1)/(lim*2.));// then shift = 0, 1/2 (so 1 falls on next layer)
+		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer)
 		if (it == 0){
 			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
 			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
@@ -559,31 +569,29 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	}
 //lim2 is thickness of layer 3
 //build thickness of layer 3 to lim2 layers
-	GL_up_even = (OM - (FM_up - V*I) -ins_FM_T.adjoint()*GL_up_even*ins_FM_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_T.adjoint()*GL_dn_even*ins_FM_T).inverse();
+	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse();
+	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse();
 	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_T_dagg*GL_up_even*FM_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dagg*GL_dn_even*FM_T).inverse();
+		GL_up_even = (OM - (FM_up - V*I) -FM_T_up_dagg*GL_up_even*FM_up_T).inverse();
+		GL_dn_even = (OM - (FM_dn - V*I) -FM_T_dn_dagg*GL_dn_even*FM_dn_T).inverse();
 	}
 
-	ddmat odd_l1_T1_dagg = odd_l1_T1.adjoint();
-	ddmat odd_l1_T2_dagg = odd_l1_T2.adjoint();
+	ddmat odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint();
+	ddmat odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint();
+	ddmat odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint();
+	ddmat odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint();
 	ddmat GL_up_odd = GL_up_even;
 	ddmat GL_dn_odd = GL_dn_even;
 	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
 	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_up_even*FM_NM_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_T_dagg*GL_dn_even*FM_NM_T).inverse();
+	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse();
+	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse();
 	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
 	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_T1_dagg*GL_up_odd*odd_l1_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_T1_dagg*GL_dn_odd*odd_l1_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_up_odd*odd_l1_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_T2_dagg*GL_dn_odd*odd_l1_T2).inverse();
-	dddmat GR;
-	GR.fill(0.);
-	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomRightCorner(18,18) = GR_dn;
+	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse();
+	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse();
+	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse();
+	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse();
 
 	//initialise integration so that they don't all get summed over every E!
 	for (int ll = 0; ll < N; ll++){
@@ -594,7 +602,7 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	/* const int n = 1; */
 	for (int kk=0; kk<n+1; kk++) {
 		theta = kk*M_PI/n;
-		f(result, theta, E, k, needi, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR);
+		f(result, theta, E, k, needi, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
 		if ((kk==0)||(kk==n)){
 			for (int ll = 0; ll < N; ll++){
 				if (needi[ll] == 1)
@@ -745,227 +753,319 @@ vector<double> int_energy(variables * send) {
 	return result;
 }
 
-/* vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below */
-/* 	double x = send->x; */
-/* 	double z = send->z; */
-/* 	vec3 Fe_basis = *send->Fe_basis; */
-/* 	vec3 Au_basis = *send->Au_basis; */
-/* 	vec3 MgO_basis = *send->MgO_basis; */
-/* 	vec3 Au_pos = *send->Au_pos; */
-/* 	vec3 MgO_pos = *send->MgO_pos; */
-/* 	vec3 Fe_pos = *send->Fe_pos; */
-/* 	vec3 Au_MgO_pos = *send->Au_MgO_pos; */
-/* 	vec3 MgO_Fe_pos = *send->MgO_Fe_pos; */
-/* 	vec3 Au_Fe_pos = *send->Au_Fe_pos; */
-/* 	vec3 Fe_Au_pos = *send->Fe_Au_pos; */
-/* 	Vector3d Au_lat_oop = *send->Au_lat_oop; */
-/* 	Vector3d Fe_lat_oop = *send->Fe_lat_oop; */
-/* 	Vector3d MgO_lat_oop = *send->MgO_lat_oop; */
-/* 	Vector3d lat_MgO_Fe = *send->lat_MgO_Fe; */
-/* 	Vector3d lat_Au_MgO = *send->lat_Au_MgO; */
-/* 	Vector3d lat_Fe_Au = *send->lat_Fe_Au; */
-/* 	Vector3d lat_Au_Fe = *send->lat_Au_Fe; */
-/* 	vM iron_up = *send->iron_up; */
-/* 	vM iron_dn = *send->iron_dn; */
-/* 	vM gold_iron_dn = *send->gold_iron_dn; */
-/* 	vM gold_iron_up = *send->gold_iron_up; */
-/*         vM gold = *send->gold; */
-/* 	vM iron_gold_dn = *send->iron_gold_dn; */
-/* 	vM iron_gold_up = *send->iron_gold_up; */
-/* 	vM magnesium = *send->magnesium; */
-/* 	vM oxide = *send->oxide; */
-/* 	vM iron_dn_MgO = *send->iron_dn_MgO; */
-/* 	vM iron_up_MgO = *send->iron_up_MgO; */
-/* 	double Au_max_dist = send->Au_max_dist; */
-/* 	double MgO_max_dist = send->MgO_max_dist; */
-/* 	double Fe_max_dist = Fe_max_dist; */
-/* 	double Au_Fe_max_dist = Au_Fe_max_dist; */
-/* 	double Au_MgO_max_dist = Au_MgO_max_dist; */
-/* 	double MgO_Fe_max_dist = MgO_Fe_max_dist; */
-/* 	M9 ins_ii, ins_12, ins_21, ins_T_ii, ins_T_12, ins_T_21, ins_NM_12, */
-/* 	   ins_NM_21, ins_NM_T_ii, ins_NM_T_12, ins_NM_T_21, ins_FM_12, */
-/* 	   ins_FM_21, ins_FM_T_ii, ins_FM_T_12, ins_FM_T_21; */
+vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below
+	double x = send->x;
+	double z = send->z;
+	vec3 Fe_basis = *send->Fe_basis;
+	vec3 Au_basis = *send->Au_basis;
+	vec3 MgO_basis = *send->MgO_basis;
+	vec3 Au_pos = *send->Au_pos;
+	vec3 MgO_pos_11 = *send->MgO_pos_11;
+	vec3 MgO_pos_12 = *send->MgO_pos_12;
+	vec3 MgO_pos_21 = *send->MgO_pos_21;
+	vec3 Fe_pos = *send->Fe_pos;
+	vec3 Au_MgO_pos_11 = *send->Au_MgO_pos_11;
+	vec3 Au_MgO_pos_12 = *send->Au_MgO_pos_12;
+	vec3 Au_MgO_pos_21 = *send->Au_MgO_pos_21;
+	vec3 Au_MgO_pos_22 = *send->Au_MgO_pos_22;
+	vec3 MgO_Fe_pos_11 = *send->MgO_Fe_pos_11;
+	vec3 MgO_Fe_pos_12 = *send->MgO_Fe_pos_12;
+	vec3 MgO_Fe_pos_21 = *send->MgO_Fe_pos_21;
+	vec3 MgO_Fe_pos_22 = *send->MgO_Fe_pos_22;
+	vec3 Au_Fe_pos = *send->Au_Fe_pos;
+	vec3 Fe_Au_pos = *send->Fe_Au_pos;
+	Vector3d Au_lat_oop = *send->Au_lat_oop;
+	Vector3d Fe_lat_oop = *send->Fe_lat_oop;
+	Vector3d MgO_lat_oop = *send->MgO_lat_oop;
+	Vector3d lat_MgO_Fe = *send->lat_MgO_Fe;
+	Vector3d lat_Au_MgO = *send->lat_Au_MgO;
+	Vector3d lat_Fe_Au = *send->lat_Fe_Au;
+	Vector3d lat_Au_Fe = *send->lat_Au_Fe;
+	vM iron_up = *send->iron_up;
+	vM iron_dn = *send->iron_dn;
+	vM gold_iron_dn = *send->gold_iron_dn;
+	vM gold_iron_up = *send->gold_iron_up;
+        vM gold = *send->gold;
+	vM iron_gold_dn = *send->iron_gold_dn;
+	vM iron_gold_up = *send->iron_gold_up;
+	vM magnesium_11 = *send->magnesium_11;
+	vM magnesium_12 = *send->magnesium_12;
+	vM magnesium_21 = *send->magnesium_21;
+	vM oxide_11 = *send->oxide_11;
+	vM oxide_12 = *send->oxide_12;
+	vM oxide_21 = *send->oxide_21;
+	vM iron_dn_MgO_11 = *send->iron_dn_MgO_11;
+	vM iron_dn_MgO_12 = *send->iron_dn_MgO_12;
+	vM iron_dn_MgO_21 = *send->iron_dn_MgO_21;
+	vM iron_dn_MgO_22 = *send->iron_dn_MgO_22;
+	vM iron_up_MgO_11 = *send->iron_up_MgO_11;
+	vM iron_up_MgO_12 = *send->iron_up_MgO_12;
+	vM iron_up_MgO_21 = *send->iron_up_MgO_21;
+	vM iron_up_MgO_22 = *send->iron_up_MgO_22;
+	vM gold_MgO_11 = *send->gold_MgO_11;
+	vM gold_MgO_12 = *send->gold_MgO_12;
+	vM gold_MgO_21 = *send->gold_MgO_21;
+	vM gold_MgO_22 = *send->gold_MgO_22;
+	M9 ins_11, ins_12, ins_21, ins_22, ins_T_11, ins_T_12, ins_T_21, ins_T_22, 
+	   ins_NM_T_11, ins_NM_T_12, ins_NM_T_21, ins_NM_T_22, ins_FM_up_T_11, 
+	   ins_FM_up_T_12, ins_FM_up_T_21, ins_FM_up_T_22, ins_FM_dn_T_11, 
+	   ins_FM_dn_T_12, ins_FM_dn_T_21, ins_FM_dn_T_22;
 
-/* 	//generate in plane Hamiltonians for simple bilayers */
-/* 	/1* ins_ii = InPlaneH(pos,  basis[0], INS, x, z); *1/ */
-/* 	/1* ins_12 = InPlaneH(pos,  basis[1], INS, x, z); *1/ */
-/* 	/1* ins_21 = InPlaneH(pos, -basis[1], INS, x, z); *1/ */
-/* 	/1* //generate hopping between simple bilayers of the same type *1/ */
-/* 	/1* ins_T_ii = InPlaneH(pos, t + basis[0], INS, x, z); *1/ */
-/* 	/1* ins_T_12 = InPlaneH(pos, t + basis[1], INS, x, z); *1/ */
-/* 	/1* ins_T_21 = InPlaneH(pos, t - basis[1], INS, x, z); *1/ */
-/* 	//additional off diagonal Hamiltonians needed for bilayers */
-/* 	//made of different atom types */
-/* 	/1* ins_NM_12 = InPlaneH(pos,  basis[1], ins_copper, x, z); *1/ */
-/* 	/1* ins_NM_21 = InPlaneH(pos, -basis[1], ins_copper, x, z); *1/ */
-/* 	/1* ins_NM_T_ii = InPlaneH(pos, t + basis[0], ins_copper, x, z); *1/ */
-/* 	/1* ins_NM_T_12 = InPlaneH(pos, t + basis[1], ins_copper, x, z); *1/ */
-/* 	/1* ins_NM_T_21 = InPlaneH(pos, t - basis[1], ins_copper, x, z); *1/ */
-/* 	/1* //TODO in this scheme so far hopping for spin up is the same as spin down *1/ */
-/* 	/1* ins_FM_12 = InPlaneH(pos,  basis[1], cob_ins_up, x, z); *1/ */
-/* 	/1* ins_FM_21 = InPlaneH(pos, -basis[1], cob_ins_up, x, z); *1/ */
-/* 	/1* ins_FM_T_ii = InPlaneH(pos, t + basis[0], cob_ins_up, x, z); *1/ */
-/* 	/1* ins_FM_T_12 = InPlaneH(pos, t + basis[1], cob_ins_up, x, z); *1/ */
-/* 	/1* ins_FM_T_21 = InPlaneH(pos, t - basis[1], cob_ins_up, x, z); *1/ */
-/* 	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, */ 
-/* 	   FM_dn_ii, FM_dn_12, FM_dn_21, NM_T_ii, NM_T_12, NM_T_21, */
-/* 	   FM_T_ii, FM_T_12, FM_T_21, FM_NM_12, FM_NM_21, */ 
-/* 	   FM_NM_T_ii, FM_NM_T_12, FM_NM_T_21; */
-/* 	//generate in plane Hamiltonians for simple bilayers */
-/* 	NM_ii = InPlaneH(Au_max_dist, Au_pos,  Au_basis[0], gold, x, z); */
-/* 	NM_12 = InPlaneH(Au_max_dist, Au_pos,  Au_basis[1], gold, x, z); */
-/* 	NM_21 = InPlaneH(Au_max_dist, Au_pos, -Au_basis[1], gold, x, z); */
-/* 	FM_up_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_up, x, z); */
-/* 	FM_up_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_up, x, z); */
-/* 	FM_up_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_up, x, z); */
-/* 	FM_dn_ii = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[0], iron_dn, x, z); */
-/* 	FM_dn_12 = InPlaneH(Fe_max_dist, Fe_pos,  Fe_basis[1], iron_dn, x, z); */
-/* 	FM_dn_21 = InPlaneH(Fe_max_dist, Fe_pos, -Fe_basis[1], iron_dn, x, z); */
-/* 	//generate hopping between simple bilayers of the same type */
-/* 	NM_T_ii = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[0], gold, x, z); */
-/* 	NM_T_12 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop + Au_basis[1], gold, x, z); */
-/* 	NM_T_21 = InPlaneH(Au_max_dist, Au_pos, Au_lat_oop - Au_basis[1], gold, x, z); */
-/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
-/* 	FM_T_ii = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, x, z); */
-/* 	FM_T_12 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, x, z); */
-/* 	FM_T_21 = InPlaneH(Fe_max_dist, Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, x, z); */
-/* 	//additional off diagonal Hamiltonians needed for bilayers */
-/* 	//made of different atom types */
-/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
-/* 	FM_NM_12 = InPlaneH(pos,  basis[1], cob_cop_dn, x, z); */
-/* 	FM_NM_21 = InPlaneH(pos, -basis[1], cob_cop_dn, x, z); */
-/* 	FM_NM_T_ii = InPlaneH(pos, t + basis[0], cob_cop_dn, x, z); */
-/* 	FM_NM_T_12 = InPlaneH(pos, t + basis[1], cob_cop_dn, x, z); */
-/* 	FM_NM_T_21 = InPlaneH(pos, t - basis[1], cob_cop_dn, x, z); */
+	//generate in plane Hamiltonians for simple bilayers
+	ins_11 = InPlaneH(MgO_pos_11,  MgO_basis[0], magnesium_11, x, z);//TODO only 2nd NN and onsite depend on atom type, catered for in 11 and 22 only
+	ins_12 = InPlaneH(MgO_pos_12,  MgO_basis[1], oxide_12, x, z);//in theory this should contain
+	ins_21 = InPlaneH(MgO_pos_21, -MgO_basis[1], oxide_21, x, z);//the same hoppings as magnesium
+	ins_22 = InPlaneH(MgO_pos_11,  MgO_basis[0], oxide_11, x, z);
+	//generate hopping between simple bilayers of the same type
+	ins_T_11 = InPlaneH(MgO_pos_11, MgO_lat_oop + MgO_basis[0], magnesium_11, x, z);//TODO as above except no onsite terms
+	ins_T_12 = InPlaneH(MgO_pos_12, MgO_lat_oop + MgO_basis[1], oxide_12, x, z);
+	ins_T_21 = InPlaneH(MgO_pos_21, MgO_lat_oop - MgO_basis[1], oxide_21, x, z);
+	ins_T_22 = InPlaneH(MgO_pos_11, MgO_lat_oop + MgO_basis[0], oxide_11, x, z);
+	//additional off diagonal Hamiltonians needed for bilayers
+	//made of different atom types
+	ins_NM_T_11 = InPlaneH(Au_MgO_pos_11, lat_Au_MgO + MgO_basis[0] - Au_basis[0], gold_MgO_11, x, z);
+	ins_NM_T_12 = InPlaneH(Au_MgO_pos_12, lat_Au_MgO + MgO_basis[1] - Au_basis[0], gold_MgO_12, x, z);
+	ins_NM_T_21 = InPlaneH(Au_MgO_pos_21, lat_Au_MgO + MgO_basis[0] - Au_basis[1], gold_MgO_21, x, z);
+	ins_NM_T_22 = InPlaneH(Au_MgO_pos_22, lat_Au_MgO + MgO_basis[1] - Au_basis[1], gold_MgO_22, x, z);
 
-/* 	ddmat FM_up, FM_dn, NM, NM_T, FM_T, FM_NM_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2; */
-/* 	ddmat ins, ins_T, ins_NM, ins_NM_T, ins_FM, ins_FM_T; */
+	ins_FM_up_T_11 = InPlaneH(MgO_Fe_pos_11, lat_MgO_Fe + Fe_basis[0] - MgO_basis[0], iron_up_MgO_11, x, z);
+	ins_FM_up_T_12 = InPlaneH(MgO_Fe_pos_12, lat_MgO_Fe + Fe_basis[1] - MgO_basis[0], iron_up_MgO_12, x, z);
+	ins_FM_up_T_21 = InPlaneH(MgO_Fe_pos_21, lat_MgO_Fe + Fe_basis[0] - MgO_basis[1], iron_up_MgO_21, x, z);
+	ins_FM_up_T_22 = InPlaneH(MgO_Fe_pos_22, lat_MgO_Fe + Fe_basis[1] - MgO_basis[1], iron_up_MgO_22, x, z);
 
-/* 	ins.topLeftCorner(9,9) = ins_ii; */
-/* 	ins.topRightCorner(9,9) = ins_12; */
-/* 	ins.bottomLeftCorner(9,9) = ins_21; */
-/* 	ins.bottomRightCorner(9,9) = ins_ii; */
-/* 	ins_T.topLeftCorner(9,9) = ins_T_ii; */
-/* 	ins_T.topRightCorner(9,9) = ins_T_12; */
-/* 	ins_T.bottomLeftCorner(9,9) = ins_T_21; */
-/* 	ins_T.bottomRightCorner(9,9) = ins_T_ii; */
-/* 	ins_NM_T.topLeftCorner(9,9) = ins_NM_T_ii; */
-/* 	ins_NM_T.topRightCorner(9,9) = ins_NM_T_12; */ 
-/* 	ins_NM_T.bottomLeftCorner(9,9) = ins_NM_T_21; */
-/* 	ins_NM_T.bottomRightCorner(9,9) = ins_NM_T_ii; */
-/* 	ins_FM_T.topLeftCorner(9,9) = ins_FM_T_ii; */
-/* 	ins_FM_T.topRightCorner(9,9) = ins_FM_T_12; */ 
-/* 	ins_FM_T.bottomLeftCorner(9,9) = ins_FM_T_21; */
-/* 	ins_FM_T.bottomRightCorner(9,9) = ins_FM_T_ii; */
+	ins_FM_dn_T_11 = InPlaneH(MgO_Fe_pos_11, lat_MgO_Fe + Fe_basis[0] - MgO_basis[0], iron_dn_MgO_11, x, z);
+	ins_FM_dn_T_12 = InPlaneH(MgO_Fe_pos_12, lat_MgO_Fe + Fe_basis[1] - MgO_basis[0], iron_dn_MgO_12, x, z);
+	ins_FM_dn_T_21 = InPlaneH(MgO_Fe_pos_21, lat_MgO_Fe + Fe_basis[0] - MgO_basis[1], iron_dn_MgO_21, x, z);
+	ins_FM_dn_T_22 = InPlaneH(MgO_Fe_pos_22, lat_MgO_Fe + Fe_basis[1] - MgO_basis[1], iron_dn_MgO_22, x, z);
 
-/* 	NM.topLeftCorner(9,9) = NM_ii; */
-/* 	NM.topRightCorner(9,9) = NM_12; */
-/* 	NM.bottomLeftCorner(9,9) = NM_21; */
-/* 	NM.bottomRightCorner(9,9) = NM_ii; */
+	M9 NM_ii, NM_12, NM_21, FM_up_ii, FM_up_12, FM_up_21, FM_dn_ii, FM_dn_12, FM_dn_21, 
+	   NM_T_ii, NM_T_12, NM_T_21, FM_up_T_ii, FM_up_T_12, FM_up_T_21, FM_dn_T_ii, 
+	   FM_dn_T_12, FM_dn_T_21, FM_NM_up_12, FM_NM_up_21, FM_NM_dn_12, FM_NM_dn_21, 
+	   FM_NM_up_T_11, FM_NM_up_T_12, FM_NM_up_T_21, FM_NM_up_T_22,
+	   FM_NM_dn_T_11, FM_NM_dn_T_12, FM_NM_dn_T_21, FM_NM_dn_T_22,
+	   NM_FM_up_T_11, NM_FM_up_T_12, NM_FM_up_T_21, NM_FM_up_T_22,
+	   NM_FM_dn_T_11, NM_FM_dn_T_12, NM_FM_dn_T_21, NM_FM_dn_T_22;
+	//generate in plane Hamiltonians for simple bilayers
+	NM_ii = InPlaneH( Au_pos,  Au_basis[0], gold, x, z);
+	NM_12 = InPlaneH( Au_pos,  Au_basis[1], gold, x, z);
+	NM_21 = InPlaneH( Au_pos, -Au_basis[1], gold, x, z);
 
-/* 	NM_T.topLeftCorner(9,9) = NM_T_ii; */
-/* 	NM_T.topRightCorner(9,9) = NM_T_12; */
-/* 	NM_T.bottomLeftCorner(9,9) = NM_T_21; */
-/* 	NM_T.bottomRightCorner(9,9) = NM_T_ii; */
+	FM_up_ii = InPlaneH( Fe_pos,  Fe_basis[0], iron_up, x, z);
+	FM_up_12 = InPlaneH( Fe_pos,  Fe_basis[1], iron_up, x, z);
+	FM_up_21 = InPlaneH( Fe_pos, -Fe_basis[1], iron_up, x, z);
 
-/* 	FM_up.topLeftCorner(9,9) = FM_up_ii; */
-/* 	FM_up.topRightCorner(9,9) = FM_up_12; */
-/* 	FM_up.bottomLeftCorner(9,9) = FM_up_21; */
-/* 	FM_up.bottomRightCorner(9,9) = FM_up_ii; */
+	FM_dn_ii = InPlaneH( Fe_pos,  Fe_basis[0], iron_dn, x, z);
+	FM_dn_12 = InPlaneH( Fe_pos,  Fe_basis[1], iron_dn, x, z);
+	FM_dn_21 = InPlaneH( Fe_pos, -Fe_basis[1], iron_dn, x, z);
+	//generate hopping between simple bilayers of the same type
+	NM_T_ii = InPlaneH( Au_pos, Au_lat_oop + Au_basis[0], gold, x, z);
+	NM_T_12 = InPlaneH( Au_pos, Au_lat_oop + Au_basis[1], gold, x, z);
+	NM_T_21 = InPlaneH( Au_pos, Au_lat_oop - Au_basis[1], gold, x, z);
 
-/* 	FM_dn.topLeftCorner(9,9) = FM_dn_ii; */
-/* 	FM_dn.topRightCorner(9,9) = FM_dn_12; */
-/* 	FM_dn.bottomLeftCorner(9,9) = FM_dn_21; */
-/* 	FM_dn.bottomRightCorner(9,9) = FM_dn_ii; */
+	FM_up_T_ii = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, x, z);
+	FM_up_T_12 = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, x, z);
+	FM_up_T_21 = InPlaneH( Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, x, z);
 
-/* 	FM_T.topLeftCorner(9,9) = FM_T_ii; */
-/* 	FM_T.topRightCorner(9,9) = FM_T_12; */
-/* 	FM_T.bottomLeftCorner(9,9) = FM_T_21; */
-/* 	FM_T.bottomRightCorner(9,9) = FM_T_ii; */
+	FM_dn_T_ii = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[0], iron_dn, x, z);
+	FM_dn_T_12 = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[1], iron_dn, x, z);
+	FM_dn_T_21 = InPlaneH( Fe_pos, Fe_lat_oop - Fe_basis[1], iron_dn, x, z);
+	//additional off diagonal Hamiltonians needed for bilayers
+	//made of different atom types
+	Vector3d X;
+	X << 1, 0, 0;//TODO do we need to do this above, where MgO puts NN with exp beyond 1..?
+	
+	FM_NM_dn_12 = InPlaneH(Fe_Au_pos, X + lat_Fe_Au - Fe_basis[1], iron_gold_dn, x, z);
+	FM_NM_dn_21 = InPlaneH(Fe_Au_pos, -(X + lat_Fe_Au - Fe_basis[1]), iron_gold_dn, x, z);
+	FM_NM_up_12 = InPlaneH(Fe_Au_pos, X + lat_Fe_Au - Fe_basis[1], iron_gold_up, x, z);
+	FM_NM_up_21 = InPlaneH(Fe_Au_pos, -(X + lat_Fe_Au - Fe_basis[1]), iron_gold_up, x, z);
 
-/* 	FM_NM_T.topLeftCorner(9,9) = FM_NM_T_ii; */
-/* 	FM_NM_T.topRightCorner(9,9) = FM_NM_T_12; */ 
-/* 	FM_NM_T.bottomLeftCorner(9,9) = FM_NM_T_21; */
-/* 	FM_NM_T.bottomRightCorner(9,9) = FM_NM_T_ii; */
+	NM_FM_up_T_11 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, x, z);
+	NM_FM_up_T_12 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, x, z);
+	NM_FM_up_T_21 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, x, z);
+	NM_FM_up_T_22 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, x, z);
 
-/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
-/* 	odd_l1_up.topLeftCorner(9,9) = FM_up_ii; */
-/* 	odd_l1_up.topRightCorner(9,9) = FM_NM_12; */
-/* 	odd_l1_up.bottomLeftCorner(9,9) = FM_NM_21; */
-/* 	odd_l1_up.bottomRightCorner(9,9) = NM_ii; */
+	NM_FM_dn_T_11 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_dn, x, z);
+	NM_FM_dn_T_12 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_dn, x, z);
+	NM_FM_dn_T_21 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_dn, x, z);
+	NM_FM_dn_T_22 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_dn, x, z);
 
-/* 	//TODO in this scheme so far hopping for spin up is the same as spin down */
-/* 	odd_l1_dn.topLeftCorner(9,9) = FM_dn_ii; */
-/* 	odd_l1_dn.topRightCorner(9,9) = FM_NM_12; */
-/* 	odd_l1_dn.bottomLeftCorner(9,9) = FM_NM_21; */
-/* 	odd_l1_dn.bottomRightCorner(9,9) = NM_ii; */
+	FM_NM_dn_T_11 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_dn, x, z);
+	FM_NM_dn_T_12 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_dn, x, z);
+	FM_NM_dn_T_21 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_dn, x, z);
+	FM_NM_dn_T_22 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_dn, x, z);
 
-/* 	odd_l1_T1.topLeftCorner(9,9) = FM_T_ii; */
-/* 	odd_l1_T1.topRightCorner(9,9) = FM_NM_T_12; */
-/* 	odd_l1_T1.bottomLeftCorner(9,9) = FM_T_21; */
-/* 	odd_l1_T1.bottomRightCorner(9,9) = FM_NM_T_ii; */
+	FM_NM_up_T_11 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, x, z);
+	FM_NM_up_T_12 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, x, z);
+	FM_NM_up_T_21 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, x, z);
+	FM_NM_up_T_22 = InPlaneH(Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, x, z);
 
-/* 	odd_l1_T2.topLeftCorner(9,9) = FM_NM_T_ii; */
-/* 	odd_l1_T2.topRightCorner(9,9) = FM_NM_T_12; */
-/* 	odd_l1_T2.bottomLeftCorner(9,9) = NM_T_21; */
-/* 	odd_l1_T2.bottomRightCorner(9,9) = NM_T_ii; */
+	ddmat FM_up, FM_dn, NM, NM_T, FM_up_T, FM_dn_T, FM_NM_up_T, FM_NM_dn_T, odd_l1_up, odd_l1_dn, odd_l1_T1, odd_l1_T2;
+	ddmat ins, ins_T, ins_NM_T, ins_FM_up_T, ins_FM_dn_T, NM_FM_up_T, NM_FM_dn_T;
 
-/* 	send->NM = &NM; */
-/* 	send->NM_T = &NM_T; */
-/* 	send->FM_up = &FM_up; */
-/* 	send->FM_dn = &FM_dn; */
-/* 	send->FM_T = &FM_T; */
-/* 	send->FM_NM_T = &FM_NM_T; */
-/* 	send->odd_l1_up = &odd_l1_up; */
-/* 	send->odd_l1_dn = &odd_l1_dn; */
-/* 	send->odd_l1_T1 = &odd_l1_T1; */
-/* 	send->odd_l1_T2 = &odd_l1_T2; */
-/* 	send->ins = &ins; */
-/* 	send->ins_T = &ins_T; */
-/* 	send->ins_NM_T = &ins_NM_T; */
-/* 	send->ins_FM_T = &ins_FM_T; */
+	ins.topLeftCorner(9,9) = ins_11;
+	ins.topRightCorner(9,9) = ins_12;
+	ins.bottomLeftCorner(9,9) = ins_21;
+	ins.bottomRightCorner(9,9) = ins_22;
+	ins_T.topLeftCorner(9,9) = ins_T_11;
+	ins_T.topRightCorner(9,9) = ins_T_12;
+	ins_T.bottomLeftCorner(9,9) = ins_T_21;
+	ins_T.bottomRightCorner(9,9) = ins_T_22;
+	ins_NM_T.topLeftCorner(9,9) = ins_NM_T_11;
+	ins_NM_T.topRightCorner(9,9) = ins_NM_T_12; 
+	ins_NM_T.bottomLeftCorner(9,9) = ins_NM_T_21;
+	ins_NM_T.bottomRightCorner(9,9) = ins_NM_T_22;
+	ins_FM_up_T.topLeftCorner(9,9) = ins_FM_up_T_11;
+	ins_FM_up_T.topRightCorner(9,9) = ins_FM_up_T_12; 
+	ins_FM_up_T.bottomLeftCorner(9,9) = ins_FM_up_T_21;
+	ins_FM_up_T.bottomRightCorner(9,9) = ins_FM_up_T_22;
+	ins_FM_dn_T.topLeftCorner(9,9) = ins_FM_dn_T_11;
+	ins_FM_dn_T.topRightCorner(9,9) = ins_FM_dn_T_12; 
+	ins_FM_dn_T.bottomLeftCorner(9,9) = ins_FM_dn_T_21;
+	ins_FM_dn_T.bottomRightCorner(9,9) = ins_FM_dn_T_22;
 
-/* 	vector<double> result1, result2, integrate; */
-/* 	int N = send->N; */
-/* 	double V = send->V; */
-/* 	result1.reserve(N); */
-/* 	if (abs(V) > 1e-9) */
-/* 		result1 = int_energy(send); */
-/* 	else { */
-/* 		for (int l = 0; l < N; l++) */
-/* 			result1[l] = 0.; */
-/* 	} */
-/* 	integrate.reserve(N); */
-/* 	result2.reserve(N); */
-/* 	for (int l = 0; l < N; l++) */
-/* 		result2[l] = 0.; */
-/* 	dcomp i; */
-/* 	i = -1.; */
-/* 	i = sqrt(i); */
-/* 	dcomp E = 0.; */
-/* 	double kT = send->kT; */
-/* 	for (int j=0; j!=15; j++){ */
-/* 		E = send->Ef + (2.*j + 1.)*kT*M_PI*i; */
-/* 		integrate = int_theta(E, send); */
-/* 		if (abs(V) < 1e-9){ */
-/* 			for (int l = 0; l < N; l++) */
-/* 				result2[l] += 2.*kT*integrate[l]; */ 
-/* 		} */
-/* 		else { */
-/* 			for (int l = 0; l < N; l++) */
-/* 				result2[l] += kT*integrate[l]; */ 
-/* 			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i; */
-/* 			integrate = int_theta(E, send); */
-/* 			for (int l = 0; l < N; l++) */
-/* 				result2[l] += kT*integrate[l]; */ 
-/* 		} */
-/* 	} */
-/* 	vector<double> total; */
-/* 	total.reserve(N); */
-/* 	for (int l = 0; l < N; l++) */
-/* 		total[l] = result1[l] + result2[l]; */
-/* 	return total; */
-/* } */
+	NM.topLeftCorner(9,9) = NM_ii;
+	NM.topRightCorner(9,9) = NM_12;
+	NM.bottomLeftCorner(9,9) = NM_21;
+	NM.bottomRightCorner(9,9) = NM_ii;
+
+	NM_T.topLeftCorner(9,9) = NM_T_ii;
+	NM_T.topRightCorner(9,9) = NM_T_12;
+	NM_T.bottomLeftCorner(9,9) = NM_T_21;
+	NM_T.bottomRightCorner(9,9) = NM_T_ii;
+
+	FM_up.topLeftCorner(9,9) = FM_up_ii;
+	FM_up.topRightCorner(9,9) = FM_up_12;
+	FM_up.bottomLeftCorner(9,9) = FM_up_21;
+	FM_up.bottomRightCorner(9,9) = FM_up_ii;
+
+	FM_dn.topLeftCorner(9,9) = FM_dn_ii;
+	FM_dn.topRightCorner(9,9) = FM_dn_12;
+	FM_dn.bottomLeftCorner(9,9) = FM_dn_21;
+	FM_dn.bottomRightCorner(9,9) = FM_dn_ii;
+
+	FM_up_T.topLeftCorner(9,9) = FM_up_T_ii;
+	FM_up_T.topRightCorner(9,9) = FM_up_T_12;
+	FM_up_T.bottomLeftCorner(9,9) = FM_up_T_21;
+	FM_up_T.bottomRightCorner(9,9) = FM_up_T_ii;
+
+	FM_dn_T.topLeftCorner(9,9) = FM_dn_T_ii;
+	FM_dn_T.topRightCorner(9,9) = FM_dn_T_12;
+	FM_dn_T.bottomLeftCorner(9,9) = FM_dn_T_21;
+	FM_dn_T.bottomRightCorner(9,9) = FM_dn_T_ii;
+
+	FM_NM_up_T.topLeftCorner(9,9) = FM_NM_up_T_11;
+	FM_NM_up_T.topRightCorner(9,9) = FM_NM_up_T_12; 
+	FM_NM_up_T.bottomLeftCorner(9,9) = FM_NM_up_T_21;
+	FM_NM_up_T.bottomRightCorner(9,9) = FM_NM_up_T_22;
+
+	FM_NM_dn_T.topLeftCorner(9,9) = FM_NM_dn_T_11;
+	FM_NM_dn_T.topRightCorner(9,9) = FM_NM_dn_T_12; 
+	FM_NM_dn_T.bottomLeftCorner(9,9) = FM_NM_dn_T_21;
+	FM_NM_dn_T.bottomRightCorner(9,9) = FM_NM_dn_T_22;
+
+	NM_FM_up_T.topLeftCorner(9,9) = NM_FM_up_T_11;
+	NM_FM_up_T.topRightCorner(9,9) = NM_FM_up_T_12; 
+	NM_FM_up_T.bottomLeftCorner(9,9) = NM_FM_up_T_21;
+	NM_FM_up_T.bottomRightCorner(9,9) = NM_FM_up_T_22;
+
+	NM_FM_dn_T.topLeftCorner(9,9) = NM_FM_dn_T_11;
+	NM_FM_dn_T.topRightCorner(9,9) = NM_FM_dn_T_12; 
+	NM_FM_dn_T.bottomLeftCorner(9,9) = NM_FM_dn_T_21;
+	NM_FM_dn_T.bottomRightCorner(9,9) = NM_FM_dn_T_22;
+
+	odd_l1_up.topLeftCorner(9,9) = FM_up_ii;
+	odd_l1_up.topRightCorner(9,9) = FM_NM_up_12;
+	odd_l1_up.bottomLeftCorner(9,9) = FM_NM_up_21;
+	odd_l1_up.bottomRightCorner(9,9) = NM_ii;
+
+	odd_l1_dn.topLeftCorner(9,9) = FM_dn_ii;
+	odd_l1_dn.topRightCorner(9,9) = FM_NM_dn_12;
+	odd_l1_dn.bottomLeftCorner(9,9) = FM_NM_dn_21;
+	odd_l1_dn.bottomRightCorner(9,9) = NM_ii;
+
+	odd_l1_up_T1.topLeftCorner(9,9) = FM_up_T_ii;
+	odd_l1_up_T1.topRightCorner(9,9) = FM_NM_up_T_12;
+	odd_l1_up_T1.bottomLeftCorner(9,9) = FM_up_T_21;
+	odd_l1_up_T1.bottomRightCorner(9,9) = FM_NM_up_T_11;//TODO I think this is right.. thinking about distances...
+
+	odd_l1_dn_T1.topLeftCorner(9,9) = FM_dn_T_ii;
+	odd_l1_dn_T1.topRightCorner(9,9) = FM_NM_dn_T_12;
+	odd_l1_dn_T1.bottomLeftCorner(9,9) = FM_dn_T_21;
+	odd_l1_dn_T1.bottomRightCorner(9,9) = FM_NM_dn_T_11;//TODO I think this is right.. thinking about distances...
+
+	odd_l1_up_T2.topLeftCorner(9,9) = FM_NM_up_T_22;//TODO as above, but opposite..
+	odd_l1_up_T2.topRightCorner(9,9) = FM_NM_up_T_12;
+	odd_l1_up_T2.bottomLeftCorner(9,9) = NM_T_21;
+	odd_l1_up_T2.bottomRightCorner(9,9) = NM_T_ii;
+
+	odd_l1_dn_T2.topLeftCorner(9,9) = FM_NM_dn_T_22;
+	odd_l1_dn_T2.topRightCorner(9,9) = FM_NM_dn_T_12;
+	odd_l1_dn_T2.bottomLeftCorner(9,9) = NM_T_21;
+	odd_l1_dn_T2.bottomRightCorner(9,9) = NM_T_ii;
+
+	send->NM = &NM;
+	send->NM_T = &NM_T;
+	send->FM_up = &FM_up;
+	send->FM_dn = &FM_dn;
+	send->FM_up_T = &FM_up_T;
+	send->FM_dn_T = &FM_dn_T;
+	send->FM_NM_up_T = &FM_NM_up_T;
+	send->FM_NM_dn_T = &FM_NM_dn_T;
+	send->NM_FM_up_T = &NM_FM_up_T;
+	send->NM_FM_dn_T = &NM_FM_dn_T;
+	send->odd_l1_up = &odd_l1_up;
+	send->odd_l1_dn = &odd_l1_dn;
+	send->odd_l1_up_T1 = &odd_l1_up_T1;
+	send->odd_l1_up_T2 = &odd_l1_up_T2;
+	send->odd_l1_dn_T1 = &odd_l1_dn_T1;
+	send->odd_l1_dn_T2 = &odd_l1_dn_T2;
+	send->ins = &ins;
+	send->ins_T = &ins_T;
+	send->ins_NM_T = &ins_NM_T;
+	send->ins_FM_up_T = &ins_FM_up_T;
+	send->ins_FM_dn_T = &ins_FM_dn_T;
+
+	vector<double> result1, result2, integrate;
+	int N = send->N;
+	double V = send->V;
+	result1.reserve(N);
+	if (abs(V) > 1e-9)
+		result1 = int_energy(send);
+	else {
+		for (int l = 0; l < N; l++)
+			result1[l] = 0.;
+	}
+	integrate.reserve(N);
+	result2.reserve(N);
+	for (int l = 0; l < N; l++)
+		result2[l] = 0.;
+	dcomp i;
+	i = -1.;
+	i = sqrt(i);
+	dcomp E = 0.;
+	double kT = send->kT;
+	for (int j=0; j!=15; j++){
+		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
+		integrate = int_theta(E, send);
+		if (abs(V) < 1e-9){
+			for (int l = 0; l < N; l++)
+				result2[l] += 2.*kT*integrate[l]; 
+		}
+		else {
+			for (int l = 0; l < N; l++)
+				result2[l] += kT*integrate[l]; 
+			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i;
+			integrate = int_theta(E, send);
+			for (int l = 0; l < N; l++)
+				result2[l] += kT*integrate[l]; 
+		}
+	}
+	vector<double> total;
+	total.reserve(N);
+	for (int l = 0; l < N; l++)
+		total[l] = result1[l] + result2[l];
+	return total;
+}
 
 int main() 
 {
@@ -1126,6 +1226,8 @@ int main()
 	MgO_Fe_nn = 0.505;//O to Fe
 	MgO_Fe_nnn = 0.710652;//Mg to Fe
 	MgO_Fe_nnnn = 0.868922;//O to Fe, but need to include the fact that basis 2 Fe is 0.8585534 from Mg!
+	//TODO be aware that the code takes advantage of the fact that only second NN hoppings are different between
+	//Mg and O... the code will break if this changes
 
 	//This section generates the Hamiltonians from SK parameters and NN positions
 	double x, y, z;
@@ -1333,6 +1435,52 @@ int main()
 						iron_dn.emplace_back(tmp_mat);
 					}
 
+					tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Fe_Au - Au_basis[i4] + Fe_basis[1];
+					/* if ((tmp_vec(1) < -0.44) && (tmp_vec(1) > -0.45)) */
+					/* 	cout<<tmp_vec.transpose()<<endl; */
+					distance = 0;
+					for (int l = 0; l < 3; l++)
+						distance += tmp_vec(l)*tmp_vec(l);
+					distance = sqrt(distance);
+					if (distance < 1e-5){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						/* cout<<"There probably shouldn't be anything here: Fe-Au"<<endl; */
+						tmp_mat = eint1(FeAu_u1, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_d1, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Au_Fe_nn + 1e-3){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(FeAu_u1, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_d1, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Au_Fe_nnn + 1e-3){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(FeAu_u2, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_d2, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Au_Fe_nnnn + 1e-3){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(FeAu_u3, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_d3, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
+
 					for (int i5 = 0; i5 < Au_basis.size(); i5++){
 						tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*lat_Fe_Au + Au_basis[i4] - Fe_basis[i5];
 						distance = 0;
@@ -1488,9 +1636,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u2, x, y, z);
 					iron_up_MgO_11.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d2, x, y, z);
 					iron_dn_MgO_11.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){
@@ -1498,9 +1646,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u3, x, y, z);
 					iron_up_MgO_11.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d3, x, y, z);
 					iron_dn_MgO_11.emplace_back(tmp_mat);
 				}
 
@@ -1568,9 +1716,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u2, x, y, z);
 					iron_up_MgO_12.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d2, x, y, z);
 					iron_dn_MgO_12.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){
@@ -1578,9 +1726,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u3, x, y, z);
 					iron_up_MgO_12.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d3, x, y, z);
 					iron_dn_MgO_12.emplace_back(tmp_mat);
 				}
 
@@ -1649,9 +1797,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u2, x, y, z);
 					iron_up_MgO_21.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d2, x, y, z);
 					iron_dn_MgO_21.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){
@@ -1659,9 +1807,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u3, x, y, z);
 					iron_up_MgO_21.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d3, x, y, z);
 					iron_dn_MgO_21.emplace_back(tmp_mat);
 				}
 
@@ -1729,9 +1877,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u2, x, y, z);
 					iron_up_MgO_22.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d2, x, y, z);
 					iron_dn_MgO_22.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){
@@ -1739,9 +1887,9 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(MgFe_u1, x, y, z);
+					tmp_mat = eint1(MgFe_u3, x, y, z);
 					iron_up_MgO_22.emplace_back(tmp_mat);
-					tmp_mat = eint1(MgFe_d1, x, y, z);
+					tmp_mat = eint1(MgFe_d3, x, y, z);
 					iron_dn_MgO_22.emplace_back(tmp_mat);
 				}
 			}
@@ -1749,115 +1897,122 @@ int main()
 	}
 
 	cout<<"MgO topLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_11, MgO_basis[0], oxide_11, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_11, MgO_basis[0], oxide_11, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO topRight"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_12, MgO_basis[1], oxide_12, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_12, MgO_basis[1], oxide_12, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO bottomLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_21,  - MgO_basis[1], oxide_21, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_21,  - MgO_basis[1], oxide_21, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"MgO topLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_11, MgO_lat_oop + MgO_basis[0], oxide_11, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_11, MgO_lat_oop + MgO_basis[0], oxide_11, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO topRight"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_12, MgO_lat_oop + MgO_basis[1], oxide_12, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_12, MgO_lat_oop + MgO_basis[1], oxide_12, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO bottomLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_nnnn_dist, MgO_pos_21, MgO_lat_oop - MgO_basis[1], oxide_21, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_pos_21, MgO_lat_oop - MgO_basis[1], oxide_21, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Au topLeft"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_basis[0], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, Au_basis[0], gold, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au topRight"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_basis[1], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, Au_basis[1], gold, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, - Au_basis[1], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, - Au_basis[1], gold, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Au topLeft"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop + Au_basis[0], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, Au_lat_oop + Au_basis[0], gold, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au topRight"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop + Au_basis[1], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, Au_lat_oop + Au_basis[1], gold, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Au_nnn_dist, Au_pos, Au_lat_oop - Au_basis[1], gold, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_pos, Au_lat_oop - Au_basis[1], gold, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Fe topLeft"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_basis[0], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, Fe_basis[0], iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe topRight"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_basis[1], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, Fe_basis[1], iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, - Fe_basis[1], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, - Fe_basis[1], iron_up, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Fe topLeft"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe topRight"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Fe_nnnn_dist, Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Fe - Au topLeft"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe - Au topRight"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe - Au bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Fe - Au bottomRight"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Au - Fe topLeft"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - Fe topRight"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - Fe bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - Fe bottomRight"<<endl;
-	tmp_mat = InPlaneH(Au_Fe_nnnn, Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"MgO - Fe topLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_11, lat_MgO_Fe - MgO_basis[0] + Fe_basis[0], iron_up_MgO_11, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_Fe_pos_11, lat_MgO_Fe - MgO_basis[0] + Fe_basis[0], iron_up_MgO_11, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO - Fe topRight"<<endl;
-	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_12, lat_MgO_Fe - MgO_basis[0] + Fe_basis[1], iron_up_MgO_12, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_Fe_pos_12, lat_MgO_Fe - MgO_basis[0] + Fe_basis[1], iron_up_MgO_12, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO - Fe bottomLeft"<<endl;
-	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_21, lat_MgO_Fe - MgO_basis[1] + Fe_basis[0], iron_up_MgO_21, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_Fe_pos_21, lat_MgO_Fe - MgO_basis[1] + Fe_basis[0], iron_up_MgO_21, 2.53, 2.53);
 	cout<<endl;
 	cout<<"MgO - Fe bottomRight"<<endl;
-	tmp_mat = InPlaneH(MgO_Fe_nnnn, MgO_Fe_pos_22, lat_MgO_Fe - MgO_basis[1] + Fe_basis[1], iron_up_MgO_22, 2.53, 2.53);
+	tmp_mat = InPlaneH( MgO_Fe_pos_22, lat_MgO_Fe - MgO_basis[1] + Fe_basis[1], iron_up_MgO_22, 2.53, 2.53);
 	cout<<endl;
 
 	cout<<"Au - MgO topLeft"<<endl;
-	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_11, lat_Au_MgO + MgO_basis[0] - Au_basis[0], gold_MgO_11, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_MgO_pos_11, lat_Au_MgO + MgO_basis[0] - Au_basis[0], gold_MgO_11, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - MgO topRight"<<endl;
-	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_12, lat_Au_MgO + MgO_basis[1] - Au_basis[0], gold_MgO_12, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_MgO_pos_12, lat_Au_MgO + MgO_basis[1] - Au_basis[0], gold_MgO_12, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - MgO bottomLeft"<<endl;
-	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_21, lat_Au_MgO + MgO_basis[0] - Au_basis[1], gold_MgO_21, 2.53, 2.53);
+	tmp_mat = InPlaneH( Au_MgO_pos_21, lat_Au_MgO + MgO_basis[0] - Au_basis[1], gold_MgO_21, 2.53, 2.53);
 	cout<<endl;
 	cout<<"Au - MgO bottomRight"<<endl;
-	tmp_mat = InPlaneH(Au_MgO_nnnn, Au_MgO_pos_22, lat_Au_MgO + MgO_basis[1] - Au_basis[1], gold_MgO_22, 2.53, 2.53);
+	tmp_mat = InPlaneH(Au_MgO_pos_22, lat_Au_MgO + MgO_basis[1] - Au_basis[1], gold_MgO_22, 2.53, 2.53);
+	cout<<endl;
+
+	cout<<"Fe - Au bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_Au_pos, lat_vec1 + lat_vec2 + lat_Fe_Au - Fe_basis[1], iron_gold_up, 2.53, 2.53);
+	cout<<endl;
+	cout<<"Fe - Au bottomLeft"<<endl;
+	tmp_mat = InPlaneH(Fe_Au_pos, -lat_vec1 - lat_vec2 -lat_Fe_Au + Fe_basis[1], iron_gold_up, 2.53, 2.53);
 	cout<<endl;
 
       vector<string> atname;
@@ -1989,12 +2144,6 @@ int main()
 	send.lat_MgO_Fe = &lat_MgO_Fe;
 	send.lat_Fe_Au = &lat_Fe_Au;
 	send.lat_Au_Fe = &lat_Au_Fe;
-	send.Au_max_dist = Au_nnn_dist;
-	send.MgO_max_dist = MgO_nnnn_dist;
-	send.Fe_max_dist = Fe_nnnn_dist;
-	send.Au_Fe_max_dist = Au_Fe_nnnn;
-	send.Au_MgO_max_dist = Au_MgO_nnnn;
-	send.MgO_Fe_max_dist = MgO_Fe_nnnn;
 	send.Au_pos = &Au_pos;
 	send.MgO_pos_11 = &MgO_pos_11;
 	send.MgO_pos_12 = &MgO_pos_12;
