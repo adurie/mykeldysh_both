@@ -8,9 +8,9 @@
 #include <Eigen/src/Core/util/MKL_support.h>
 /* #include "vector_integration.h" */
 /* #include <gsl/gsl_integration.h> */
-#include <nag.h>
-#include <nagd01.h>
-#include <nag_stdlib.h>
+/* #include <nag.h> */
+/* #include <nagd01.h> */
+/* #include <nag_stdlib.h> */
 #include <vector>
 #include "AuMgOFe.h"
 #include <ctime>
@@ -116,6 +116,432 @@ typedef struct
 	}
 variables;
 
+void remve(MatrixXcd &zh0, vector<int> &lst, int n, int nlst){
+      MatrixXcd zh(n,n);
+      vector<int> notlst;
+//     remove rows and columns contained in lst from zh0
+
+//     first create a list of rows not to eliminate
+      int icount=0;
+      int condition = 0;
+      for (int i = 0; i < n; i++){
+	for (int j = 0; j < nlst; j++){
+	  if (lst[j] == i) 
+            condition = 1;
+	}
+	if (condition == 0){
+	  icount++;
+	  notlst.emplace_back(i);
+	}
+	condition = 0;
+      }
+
+      int ii, jj;
+      for (int i = 0; i < icount; i++){
+	for (int j = 0; j < icount; j++){
+          ii = notlst[i];
+	  jj = notlst[j];
+	  zh(i,j) = zh0(ii,jj);
+	}
+      }
+
+      if (icount != n-nlst)
+        cout<<"ERROR REMVE: "<<icount<<" "<<n-nlst<<endl;
+
+      zh0 = zh;
+
+      return;
+}
+
+void decim(MatrixXcd &zh0, int k, int n){
+      MatrixXcd zh(n,n);
+//     Decimate row/column k from zh0
+      for (int i = 0; i < n; i++){
+	for (int j = 0; j < n; j++){
+          zh(i,j)=zh0(i,j)-zh0(i,k)*zh0(k,j)/zh0(k,k);
+	}
+      }
+      zh0 = zh;
+      return;
+}
+
+void adlayer1(MatrixXcd &zgl, MatrixXcd &zu, MatrixXcd &zt, dcomp zener, int n){
+//     adlayer ontop of gl
+      MatrixXcd zwrk(n, n);
+      zwrk = zgl*zt;
+      zgl = zt.adjoint()*zwrk;
+      MatrixXcd I = MatrixXcd::Identity(n, n);
+
+      zwrk = (zener*I-zu-zgl).inverse();
+      zgl = zwrk;
+      return;
+}
+
+int surfacenew(MatrixXcd &zu, MatrixXcd &zt, dcomp zener, MatrixXcd &zsurfl, MatrixXcd &zsurfr, int natom){
+//     this routine is written for the atomic cell SGF
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+      int n=natom;                       
+      int n2=2*n;
+
+      dcomp zi=-1;
+      zi = sqrt(zi);
+      double ener = real(zener);
+
+      MatrixXcd zunit = MatrixXcd::Identity(n,n);
+
+//     -----------------------------------------------------------------
+//     -----------------------------------------------------------------
+//     now calculate GF's from closed form
+//     -----------------------------------------------------------------
+//     -----------------------------------------------------------------
+//     define zp
+//     redefine gamma and delta
+      MatrixXcd ztmp1(n,n), ztinv(n,n), zs(n,n), zsinv(n,n), zgamma(n,n);
+      MatrixXcd zero = MatrixXcd::Zero(n,n);
+      ztmp1 = ener*zunit - zu;
+      ztinv = zt.inverse();
+      zs = zt.adjoint();
+      zsinv = zs.inverse();
+      zgamma = ztmp1*ztinv;
+      MatrixXcd zp(n2,n2), O(n2,n2);
+      zp.topLeftCorner(n,n) = zero;
+      zp.topRightCorner(n,n) = ztinv;
+      zp.bottomLeftCorner(n,n) = -zs;
+      zp.bottomRightCorner(n,n) = zgamma; 
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+//     diagonalise zp
+      cout<<zp.real()<<endl;
+      ComplexEigenSolver<MatrixXcd> ces;
+      ces.compute(zp);
+      O = ces.eigenvectors();
+      VectorXcd rr;
+      rr = ces.eigenvalues();
+      int ifail = ces.info();
+      /* cout<<ces.info()<<endl; */
+      /* if (ifail != 0){ */
+      /*   cout<<"SURFACENEW : ifail = "<<ifail<<endl; */
+      /*   ifail=1; */
+      /*   return ifail; */
+      /* } */
+
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+//     sort the |evals| into increasing order
+//     and check eval(n+1)>eval(n)
+
+//     define zdp
+      MatrixXcd zdp(n2,n2);
+      zdp.fill(0.);
+      zdp.bottomRightCorner(n,n) = ztinv;
+      MatrixXcd zfoo1(n2,n2), zfoo2(n2,n2);
+      zfoo1 = O;
+      zfoo2 = O.inverse();
+
+      double evlir;
+      dcomp zevlir, zdevl, zdkde;
+      VectorXd evlab(n2);
+      evlab.fill(0.);
+      for (int ir = 0; ir < n2; ir++){
+	evlir = abs(rr(ir));
+	zevlir = rr(ir);
+	if (evlir > (1+1e-8))
+	  evlab(ir) = evlir;
+	else if (evlir < (1-1e-8))
+	  evlab(ir) = evlir;
+        else { // the eigenvalue lies on the unit circle .. check its derivative
+	  zdevl = 0.;
+	  for (int is = 0; is < n2; is++){
+	    for (int it = 0; it < n2; it++){
+	      zdevl = zdevl + zfoo2(ir,is)*zdp(is,it)*zfoo1(it,ir);
+	    }
+	  }
+          zdkde=zdevl/(zevlir*zi);
+          if (imag(zdkde) > 5.e-5)
+	    cout<<"ERROR:dimag(zdkde)=/ 0 "<<imag(zdkde)<<endl;
+          evlab(ir)=evlir*exp(-real(zdkde)*1.e-8);
+	  }
+	}
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+      /* do ir=1,n */
+      /*   do is=1,n */
+      /*     ik=evlab(is+n) */
+      /*     ztmp1(ir,is)=dcmplx(vr(ir,ik),vi(ir,ik)) */
+      /*     ztmp2(ir,is)=dcmplx(vr(ir+n,ik),vi(ir+n,ik)) */
+      /*   enddo */
+      /* enddo */
+//     calculate L.H. zsurf
+      MatrixXcd b = O.topRightCorner(n, n);
+      MatrixXcd d = O.bottomRightCorner(n, n);
+      zsurfl = b*d.inverse();
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+/* //	** less efficient but ifail doesn't complain */
+/*       zgamma = ztmp1*zsinv; */
+/*       zp.topLeftCorner(n,n) = zero; */
+/*       zp.topRightCorner(n,n) = zsinv; */
+/*       zp.bottomLeftCorner(n,n) = -zt; */
+/*       zp.bottomRightCorner(n,n) = zgamma; */ 
+/* //     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */ 
+/* //     diagonalise zp */
+/*       ces.compute(zp); */
+/*       O = ces.eigenvectors(); */
+/*       ifail = ces.info(); */
+/*       if (ifail != 0){ */
+/*         cout<<"SURFACENEW : ifail = "<<ifail<<endl; */
+/*         ifail=1; */
+/*         return ifail; */
+/*       } */
+/* //     calculate R.H. zsurf */
+/*       b = O.topRightCorner(n, n); */
+/*       d = O.bottomRightCorner(n, n); */
+/*       zsurfr = b*d.inverse(); */
+/*       MatrixXcd ztmp2; */
+/*       ztmp1 = zsurfl; */
+/*       ztmp2 = zsurfr; */
+/*       adlayer1(ztmp1,zu,zt,zener,n); */
+/*       adlayer1(ztmp2,zu,zs,zener,n); */
+/*       ztmp1 = ztmp1 - zsurfl; */
+/*       ztmp2 = ztmp2 - zsurfr; */
+/*       if ((ztmp1.cwiseAbs().maxCoeff() > 5e-5) || (ztmp2.cwiseAbs().maxCoeff() > 5e-5)) */
+/*         ifail=1; */
+/* //	** */
+
+//	more efficient but not fully functional (though final results don't seem impacted)
+//	*UPDATE* since adding the below loop, ifail no longer complains
+      /* do ir=1,n2 */
+      /*   ik=isort(ir) */
+      /*   zevl(ir)=dcmplx(rr(ik),ri(ik)) */
+      /* enddo */
+      /* do ir=1,n */
+      /*   do is=1,n */
+      /*     ik=isort(is) */
+      /*     ztmp1(ir,is)=dcmplx(vr(ir,ik),vi(ir,ik)) */
+      /*     ztmp2(ir,is)=ztmp1(ir,is) */
+      /*   enddo */
+      /* enddo */
+      MatrixXcd zevl, ztmp2, ztmp3;
+      zevl = ces.eigenvalues().asDiagonal();
+      ztmp1 = O.topLeftCorner(n,n);
+      ztmp2 = ztmp1.inverse();
+      ztmp1 = ztmp1*zevl.topLeftCorner(n,n);
+      ztmp3 = ztmp1*ztmp2;
+      zsurfr = ztmp3*zsinv;
+//     -----------------------------------------------------------------
+      ztmp1 = zsurfl;
+      ztmp2 = zsurfr;
+      adlayer1(ztmp1,zu,zt,zener,n);
+      adlayer1(ztmp2,zu,zs,zener,n);
+      ztmp3 = ztmp1 - zsurfl;
+      if (ztmp3.cwiseAbs().maxCoeff() > 5e-5)
+        ifail=1;
+      zsurfl = ztmp1;
+      ztmp3 = ztmp2 - zsurfr;
+      while (ztmp3.cwiseAbs().maxCoeff() > 5e-5){
+	zsurfr = ztmp2;
+        adlayer1(ztmp2,zu,zs,zener,n);
+        ztmp3 = ztmp2 - zsurfr;
+      }
+      zsurfr = ztmp2;
+
+      //This line shifts the bandstructure of Co at the surface if required
+      /* adlayer1(zsurfr,zu,zs,zener-0.05,n); */
+      /* adlayer1(zsurfr,zu,zs,zener-0.05,n); */
+
+      return ifail;
+}
+
+double surfacedecim(MatrixXcd &zu0, MatrixXcd &zt0, dcomp zener, MatrixXcd &zsurfl, MatrixXcd &zsurfr, int n){
+//     This program calculates the surface Green's function 
+//     using decimation/reduction and Mobius transformation
+//     The decimation part reduces the size of U and T is T is singular.
+//     This part is described in Sanvito et. al. PRB 73, 085414 (2006)
+
+//     A simpler version is given in (Andrey's)
+//     Papers and Notes/Tight Binding/Surface Greens Functions/decimation*.mws
+
+//     -----------------------------------------------------------------
+//     The following is a key parameter: may need to change this for 
+//     more accurate SGF
+
+      double svmin=5e-7;      // if sv(i)<svmin then sv(i)=0
+//     -----------------------------------------------------------------
+      MatrixXcd zunit = MatrixXcd::Identity(n,n);
+//     -----------------------------------------------------------------
+//     Find SVD of zt : zt = Q.S.P     where S(1,1) >= S(2,2,) >= ... >= 0
+      MatrixXcd zt(n,n), zu(n,n), zp(n,n), ztmp(n,n);
+      zt = zt0;
+      /* JacobiSVD<MatrixXcd> svd; */
+      JacobiSVD<MatrixXcd,NoQRPreconditioner> svd(zt, ComputeFullV);
+      VectorXd sv;
+      sv = svd.singularValues();
+      zp = svd.matrixV();
+      dcomp i;
+      i = -1;
+      i = sqrt(i);
+//     zp can have some very small numbers ... set these to 0
+      for (int ii = 0; ii < n; ii++){
+	for (int jj = 0; jj < n; jj++){
+	  if ((abs(real(zp(ii,jj))) < 1e-40) && (abs(imag(zp(ii,jj))) < 1e-40))
+	    zp(ii,jj) = 0.;
+	  else if (abs(real(zp(ii,jj))) < 1e-40)
+	    zp(ii,jj) = i*imag(zp(ii,jj));
+	  else if (abs(imag(zp(ii,jj))) < 1e-40)
+	    zp(ii,jj) = real(zp(ii,jj));
+	}
+      }
+
+//     Now rearrange P and S so that 0 <= S(1,1) <= S(2,2) <= ...
+      dcomp ztmp1;
+      for (int ii = 0; ii < n/2; ii++){
+	for (int jj = 0; jj < n; jj++){
+          ztmp1 = zp(ii, jj);
+	  zp(ii, jj) = zp(n-ii-1, jj);
+	  zp(n-ii-1, jj) = ztmp1;
+	}
+      }
+      sv.reverseInPlace();
+
+//     Now transform all matrices  M -> P.M.P^h
+      zu = zu0;
+      zt = zt0;
+      ztmp = zp*zu;
+      zu = ztmp*zp.adjoint();
+      ztmp = zp*zt;
+      zt = ztmp*zp.adjoint();
+//     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+//     now set up lst and nlst:   the rows to be decimated
+      int icnt=0;
+      vector<int> lst;
+      int nlst;
+      for (int ii = 0; ii < n; ii++){
+	if (abs(sv(ii)) < svmin){
+	  lst.emplace_back(ii);
+	  icnt++;
+	}
+      }
+      int itmp;
+      for (int ii = 0; ii < icnt; ii++){
+	itmp = lst[ii] + n;
+	lst.emplace_back(itmp);
+      }
+      nlst=2*icnt;
+
+//     -----------------------------------------------------------------
+//     Create a matrix to calculate the bulk decimated/reduced on and off 
+//     site elements
+      int dn = 2*n;
+      MatrixXcd zh(dn,dn), zhbulk(dn,dn);
+      ztmp = zener*zunit - zu;
+      zh.topLeftCorner(n,n) = ztmp;
+      zh.bottomRightCorner(n,n) = ztmp;
+      zh.topRightCorner(n,n) = -zt;
+      zh.bottomLeftCorner(n,n) = -zt.adjoint();
+
+      zhbulk = zh;
+      int iii;
+      for (int ii = 0; ii<nlst; ii++){
+	iii = lst[ii];
+        decim(zhbulk,iii,dn);
+      }
+      remve(zhbulk,lst,dn,nlst);
+
+//     zhbulk is (2.nred x 2.nred)
+//     Now calculate the reduced/decimated SGF ie. the very bottom RH element
+      int nred=n-nlst/2;
+      MatrixXcd zunit2 = MatrixXcd::Identity(nred,nred);
+      MatrixXcd zured1(nred,nred), zured2(nred,nred), ztred(nred,nred);
+      zured1 = zener*zunit2 - zhbulk.topLeftCorner(nred,nred);
+      zured2 = zener*zunit2 - zhbulk.block(nred,nred,nred,nred);
+      ztred = -zhbulk.block(0,nred,nred,nred);
+//     Create SGFs
+      int ifail=0;
+      MatrixXcd zglred(nred,nred), zgrred(nred,nred);
+      ifail = surfacenew(zured2,ztred,zener,zglred,zgrred,nred);
+      if (ifail != 0)// zt has a near zero eigenvalue
+	cout<<"eigenvalues ill-conditioned. Consider coding to higher precision"<<endl;
+
+//     =================================================================
+//     Left Hand SGF:
+//     =================================================================
+//     Create the nxn non-reduced SGF by adlayering
+//     First create u and t for the last layer
+      MatrixXcd zhlast(dn,dn);
+      MatrixXcd zulast(n,n), ztlast(n,n);
+      zhlast = zh;
+      for (int ii=0; ii < nlst/2; ii++){
+        iii=lst[ii];
+        decim(zhlast,iii,dn);
+      }
+      zulast = zener*zunit - zhlast.bottomRightCorner(n,n);
+//     Bulk out ztlast to be (n x n)
+      ztlast = -zhlast.topRightCorner(n,n);
+
+//     Now bulk the SGF to (n x n)
+//     (could use non-square matrices instead here!)
+      zsurfl.fill(0.);
+      zsurfl.block(n-nred,n-nred,nred,nred) = zglred;
+
+//     Now adlayer on top of this
+      adlayer1(zsurfl,zulast,ztlast,zener,n);
+
+//     Now untransform this SGF
+      zp.adjointInPlace();
+      ztmp = zp*zsurfl;
+      zsurfl = ztmp*zp.adjoint();
+
+//     =================================================================
+//     Right Hand SGF:
+//     =================================================================
+      MatrixXcd ztreddag(nred,nred);
+      ztreddag = ztred.adjoint();
+      adlayer1(zgrred,zured1,ztreddag,zener,nred);
+
+//     Now bulk the SGF to (n x n)
+      zsurfr.fill(0.);
+      zsurfr.block(n-nred,n-nred,nred,nred) = zgrred;
+
+//     Now adlayer on top of this
+      MatrixXcd ztdag(n,n);
+      ztdag = zt.adjoint();
+      adlayer1(zsurfr,zu,ztdag,zener,n);
+
+//     Now untransform this SGF
+      ztmp = zp*zsurfr;
+      zsurfr = ztmp*zp.adjoint();
+
+//     =================================================================
+//     =================================================================
+
+//     Check these are the correct SGF
+      MatrixXcd zsurf2(n,n);
+      zsurf2 = zsurfl;
+      adlayer1(zsurf2,zu0,zt0,zener,n);
+      double xmaxerrl=0.;
+      double errl;
+      for (int ii = 0; ii < n; ii++){
+	for (int jj = 0; jj < n; jj++){
+          errl = abs(zsurfl(ii,jj) - zsurf2(ii,jj));
+	  xmaxerrl = max(xmaxerrl, errl);
+	}
+      }
+
+      MatrixXcd zt0dag(n,n);
+      zsurf2 = zsurfr;
+      zt0dag = zt0.adjoint();
+      adlayer1(zsurf2,zu0,zt0dag,zener,n);
+      double xmaxerrr=0.;
+      double errr;
+      for (int ii = 0; ii < n; ii++){
+	for (int jj = 0; jj < n; jj++){
+          errr = abs(zsurfr(ii,jj) - zsurf2(ii,jj));
+	  xmaxerrr = max(xmaxerrr, errr);
+	}
+      }
+
+      double errmax=max(xmaxerrl,xmaxerrr);
+
+      return errmax;
+}
 //calculates g at the interfaces
 ddmat gs(const ddmat &OM, const ddmat &T)
 {
@@ -157,241 +583,9 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	return result;
 }
 
-vector<double> f_vec(const double theta, const dcomp E, variables * send, const ddmat &GL_UP_e, const ddmat &GL_DN_e, 
-		const ddmat &GL_UP_o, const ddmat &GL_DN_o, const ddmat &Gr_up, const ddmat &Gr_dn) {
-	dcomp i = -1;
-	i = sqrt(i);
-	double V = send->V;
-	double kT = send->kT;
-	double Ef = send->Ef;
-	int N = send->N;
-	ddmat NM = *send->NM;
-	ddmat NM_T = *send->NM_T;
-	ddmat FM_up_T = *send->FM_up_T;
-	ddmat FM_dn_T = *send->FM_dn_T;
-	ddmat NM_FM_up_T = *send->NM_FM_up_T;
-	ddmat NM_FM_dn_T = *send->NM_FM_dn_T;
-
-	ddmat GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd;
-	GL_up_even = GL_UP_e;
-	GL_dn_even = GL_DN_e;
-	GL_up_odd = GL_UP_o;
-	GL_dn_odd = GL_DN_o;
-	ddmat GR_up, GR_dn;
-	dddmat GR;
-	ddmat NM_T_dagg;
-	NM_T_dagg = NM_T.adjoint();
-	ddmat NM_FM_up_T_dagg;
-	ddmat NM_FM_dn_T_dagg;
-	NM_FM_up_T_dagg = NM_FM_up_T.adjoint();
-	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint();
-	ddmat I = ddmat::Identity();
-	dddmat S;
-	ddmat S11, S12;
-	S11 = cos(theta/2.)*I;
-	S12 = sin(theta/2.)*I;
-	S.topLeftCorner(18,18) = S11;
-	S.topRightCorner(18,18) = S12;
-	S.bottomLeftCorner(18,18) = -S12;
-	S.bottomRightCorner(18,18) = S11;
-
-	ddmat OM = E*I;
-	//adlayer one bilayer onto RHS G to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GR_up = (OM - (NM - V*I)-NM_FM_up_T*Gr_up*NM_FM_up_T_dagg).inverse();//TODO is this correct before rotating..?
-	GR_dn = (OM - (NM - V*I)-NM_FM_dn_T*Gr_dn*NM_FM_dn_T_dagg).inverse();
-	GR.fill(0.);
-	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomRightCorner(18,18) = GR_dn;
-
-	dddmat GL_even, GL_odd, GR_dagg;
-	GL_even.fill(0.);
-	GL_odd.fill(0.);
-	GR = S.inverse()*GR*S;
-
-	dddmat Ibig = dddmat::Identity();
-	dddmat OMbig = E*Ibig;
-	dddmat NMbig;
-	NMbig.fill(0.);
-	NMbig.topLeftCorner(18,18) = NM;
-	NMbig.bottomRightCorner(18,18) = NM;
-	GR_dagg = GR.adjoint();
-
-	dddmat Pauli;//This is the y Pauli sigma Matrix
-	Pauli.fill(0.);
-	Pauli.topRightCorner(18,18) = -i*I;
-	Pauli.bottomLeftCorner(18,18) = i*I;
-	/* Pauli.topRightCorner(18,18) = I; */
-	/* Pauli.bottomLeftCorner(18,18) = I; */
-
-	/* dddmat Pauli = Ibig; */
-
-	double spincurrent_even, spincurrent_odd;
-	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
-	dddmat T, Tdagg;
-	T.fill(0.);
-	T.topLeftCorner(18,18) = NM_T;
-	T.bottomRightCorner(18,18) = NM_T;
-	Tdagg = T.adjoint();
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
-	GR_T_dagg = GR*Tdagg;
-	GR_dagg_T_dagg = GR_dagg*Tdagg;
-	dddmat tmp1, tmp2;
-	vector<double> result;
-	result.reserve(N);
-	//TODO at the moment, this is only accurate from N = 4...
-	//because of gmean behaviour. See questions.txt
-//adlayer layer 2 from layer 1 to spacer thickness, N
-	for (int it=0; it < N/2; ++it){
-		GL_even.topLeftCorner(18,18) = GL_up_even;
-		GL_even.bottomRightCorner(18,18) = GL_dn_even;
-		GL_odd.topLeftCorner(18,18) = GL_up_odd;
-		GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
-		A_even = (Ibig-GR_T_dagg*GL_even*T).inverse();
-		B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
-		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse();
-		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
-		TOT_even = (B_even.adjoint()-A_even)*Pauli;
-		TOT_odd = (B_odd.adjoint()-A_odd)*Pauli;
-		spincurrent_even = .25*imag(TOT_even.trace());
-		spincurrent_odd = .25*imag(TOT_odd.trace());
-		result.emplace_back(spincurrent_even);
-		result.emplace_back(spincurrent_odd);
-		GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
-		GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-		GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
-		GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
-	}
-	return result;
-}
-
-void f(double * spincurrent, const double theta, const dcomp E, int k, Integer * needi, variables * send, const ddmat &GL_UP_even, 
-		const ddmat &GL_DN_even, const ddmat &GL_UP_odd, const ddmat &GL_DN_odd, const ddmat &Gr_up, const ddmat &Gr_dn) {
-// ...NM|ins|FM(0)|NM(n)|FM(theta)...
-	dcomp i = -1;
-	i = sqrt(i);
-	double V = send->V;
-	double kT = send->kT;
-	double Ef = send->Ef;
-	int N = send->N;
-	ddmat NM = *send->NM;
-	ddmat NM_T = *send->NM_T;
-	ddmat FM_up_T = *send->FM_up_T;
-	ddmat FM_dn_T = *send->FM_dn_T;
-	ddmat NM_FM_up_T = *send->NM_FM_up_T;
-	ddmat NM_FM_dn_T = *send->NM_FM_dn_T;
-
-	ddmat GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd;
-	GL_up_even = GL_UP_even;
-	GL_dn_even = GL_DN_even;
-	GL_up_odd = GL_UP_odd;
-	GL_dn_odd = GL_DN_odd;
-	ddmat GR_up, GR_dn;
-	dddmat GR;
-	ddmat NM_T_dagg;
-	NM_T_dagg = NM_T.adjoint();
-	ddmat NM_FM_up_T_dagg;
-	ddmat NM_FM_dn_T_dagg;
-	NM_FM_up_T_dagg = NM_FM_up_T.adjoint();
-	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint();
-	ddmat I = ddmat::Identity();
-	dddmat S;
-	ddmat S11, S12;
-	S11 = cos(theta/2.)*I;
-	S12 = sin(theta/2.)*I;
-	S.topLeftCorner(18,18) = S11;
-	S.topRightCorner(18,18) = S12;
-	S.bottomLeftCorner(18,18) = -S12;
-	S.bottomRightCorner(18,18) = S11;
-
-	ddmat OM = E*I;
-	//adlayer one bilayer onto RHS G to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GR_up = (OM - (NM - V*I)-NM_FM_up_T*Gr_up*NM_FM_up_T_dagg).inverse();//TODO is this correct before rotating..?
-	GR_dn = (OM - (NM - V*I)-NM_FM_dn_T*Gr_dn*NM_FM_dn_T_dagg).inverse();
-	GR.fill(0.);
-	GR.topLeftCorner(18,18) = GR_up;
-	GR.bottomRightCorner(18,18) = GR_dn;
-
-	dddmat GL_even, GL_odd, GR_dagg;
-	GL_even.fill(0.);
-	GL_odd.fill(0.);
-	GR = S.inverse()*GR*S;
-
-	dddmat Ibig = dddmat::Identity();
-	dddmat OMbig = E*Ibig;
-	dddmat NMbig;
-	NMbig.fill(0.);
-	NMbig.topLeftCorner(18,18) = NM;
-	NMbig.bottomRightCorner(18,18) = NM;
-	GR_dagg = GR.adjoint();
-
-	dddmat Pauli;//This is the y Pauli sigma Matrix
-	Pauli.fill(0.);
-	Pauli.topRightCorner(18,18) = -i*I;
-	Pauli.bottomLeftCorner(18,18) = i*I;
-
-	dddmat A, B, TOT;
-	dddmat T, Tdagg;
-	T.fill(0.);
-	T.topLeftCorner(18,18) = NM_T;
-	T.bottomRightCorner(18,18) = NM_T;
-	Tdagg = T.adjoint();
-	dddmat GR_T_dagg, GR_dagg_T_dagg;
-	GR_T_dagg = GR*Tdagg;
-	GR_dagg_T_dagg = GR_dagg*Tdagg;
-	dddmat tmp1, tmp2;
-	//TODO at the moment, this is only accurate from N = 4...
-	//because of gmean behaviour. See questions.txt
-//adlayer layer 2 from layer 1 to spacer thickness, N
-	int kl;
-	for (kl = N - 1; kl >= 0; kl--){
-		if (needi[kl] == 1)
-			break;
-	}
-	kl++;
-	if (kl % 2 == 1)
-		kl++;
-
-	for (int it=0; it < kl/2; ++it){
-		if (needi[2*it] == 1){
-			GL_even.topLeftCorner(18,18) = GL_up_even;
-			GL_even.bottomRightCorner(18,18) = GL_dn_even;
-			A = (Ibig-GR_T_dagg*GL_even*T).inverse();
-			B = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse();
-			tmp1 = B*GR_dagg_T_dagg;
-			tmp2 = A*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_even*tmp1;
-			TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
-			spincurrent[2*it] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (needi[2*it + 1] == 1){
-			GL_odd.topLeftCorner(18,18) = GL_up_odd;
-			GL_odd.bottomRightCorner(18,18) = GL_dn_odd;
-			A= (Ibig-GR_T_dagg*GL_odd*T).inverse();
-			B= (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse();
-			tmp1 = B*GR_dagg_T_dagg;
-			tmp2 = A*tmp1;
-			tmp1 = T*tmp2;
-			tmp2 = GL_odd*tmp1;
-			TOT = (tmp2-A*B+0.5*(A+B))*Pauli;
-			spincurrent[2*it + 1] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT)));
-		}
-
-		if (it != kl/2 - 1){//saves wasting unused results
-			GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse();
-			GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse();
-			GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse();
-			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse();
-		}
-	}
-}
-
-vector<double> int_theta(const dcomp E, variables * send) {
-	vector<double> result;
-	vector<double> integrate;
+double int_theta(const dcomp E, variables * send) {
+	double result;
+	double integrate;
 	ddmat FM_up = *send->FM_up;
 	ddmat FM_dn = *send->FM_dn;
 	ddmat NM = *send->NM;
@@ -419,340 +613,59 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	ddmat OMdn=E*I-(FM_dn - V*I);
 	ddmat OM = E*I;
 
-	ddmat FM_up_T_dagg = FM_up_T.adjoint();
-	ddmat FM_dn_T_dagg = FM_dn_T.adjoint();
-	ddmat GR_up = gs(OMup, FM_up_T_dagg);
-	ddmat GR_dn = gs(OMdn, FM_dn_T_dagg);
-	ddmat FM_NM_up_T_dagg = FM_NM_up_T.adjoint();
-	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
-	ddmat NM_T_dagg = NM_T.adjoint();
-	
-	/* //this for trilayer */
-	/* ddmat GL_up = gs(OMup, FM_T); */
-	/* ddmat GL_dn = gs(OMdn, FM_T); */
-
-	//this below block for 5 layer
-	ddmat GL_up_even = gs(OM - NM, NM_T);
-	ddmat GL_dn_even = GL_up_even;
-	//this below block for 5 layer
-//lim is thickness of layer 2
-	const int lim = send->lim;
-	const int lim2 = send->lim2;
+	int n = 18;
+	MatrixXcd zuat(n,n), ztat(n,n), GL(n,n), GR(n,n);
+	zuat = ins;
+	ztat = ins_T;
+	double errmax;
+        errmax = surfacedecim(zuat,ztat,E,GL,GR,n);
+        if (errmax > 1e-3){   // zt has a near zero eigenvalue
+          cout<<"ERROR surfacedecim:  errmax = "<<errmax<<endl;
+	}
+	/* cout<<ins_T.real()<<endl<<endl; */
+	/* ddmat NM_T_dagg = NM_T.adjoint(); */
 	ddmat ins_T_dagg = ins_T.adjoint();
-	ddmat ins_NM_T_dagg = ins_NM_T.adjoint();
-//build thickness of layer 2 to lim layers
-	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites
-		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer)
-		if (it == 0){
-			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
-			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
-		}
-		else {
-			GL_up_even = (OM - ins -ins_NM_T_dagg*GL_up_even*ins_NM_T).inverse();
-			GL_dn_even = (OM - ins -ins_NM_T_dagg*GL_dn_even*ins_NM_T).inverse();
-		}
-	}
-//lim2 is thickness of layer 3
-//build thickness of layer 3 to lim2 layers
-//add 10 bilayers i.e. 20 layers of FM
-	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse();
-	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up_even*FM_up_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn_even*FM_dn_T).inverse();
-	}
-
-	ddmat GL_up_odd = GL_up_even;
-	ddmat GL_dn_odd = GL_dn_even;
-	ddmat odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint();
-	ddmat odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint();
-	ddmat odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint();
-	ddmat odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint();
-	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse();
-	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
-	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse();
-	int N = send->N;
-	result.reserve(N);
-	integrate.reserve(N);
-	for (int i = 0; i < N; i++){
-		result[i] = 0.;
-		integrate[i] = 0.;
-	}
-	double theta;
-
-	const int n = 10;
-	/* const int n = 1; */
-	for (int k=0; k<n+1; k++) {
-		theta = k*M_PI/n;
-		integrate = f_vec(theta, E, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
-		for (int i = 0; i < N; i++){
-			if ((k==0)||(k==n))
-				result[i] += M_PI*(0.5/n)*integrate[i];
-			else 
-				result[i] += (M_PI/n)*integrate[i];
-		}
-	}	
-	return result;
-}
-
-void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables * send) {
-	double theta;
-	int N = send->N;
-	double result[N];
-	ddmat FM_up = *send->FM_up;
-	ddmat FM_dn = *send->FM_dn;
-	ddmat NM = *send->NM;
-	ddmat NM_T = *send->NM_T;
-	ddmat FM_up_T = *send->FM_up_T;
-	ddmat FM_dn_T = *send->FM_dn_T;
-	ddmat FM_NM_up_T = *send->FM_NM_up_T;
-	ddmat FM_NM_dn_T = *send->FM_NM_dn_T;
-	ddmat odd_l1_up = *send->odd_l1_up;
-	ddmat odd_l1_dn = *send->odd_l1_dn;
-	ddmat odd_l1_up_T1 = *send->odd_l1_up_T1;
-	ddmat odd_l1_dn_T1 = *send->odd_l1_dn_T1;
-	ddmat odd_l1_up_T2 = *send->odd_l1_up_T2;
-	ddmat odd_l1_dn_T2 = *send->odd_l1_dn_T2;
-	ddmat ins = *send->ins;
-	ddmat ins_T = *send->ins_T;
-	ddmat ins_FM_up_T = *send->ins_FM_up_T;
-	ddmat ins_FM_dn_T = *send->ins_FM_dn_T;
-	ddmat ins_NM_T = *send->ins_NM_T;
-	/* cout<<NM<<endl<<endl; */
-	double V = send->V;
-
-	ddmat I = ddmat::Identity();
-	ddmat OMup=E*I-(FM_up - V*I);
-	ddmat OMdn=E*I-(FM_dn - V*I);
-	ddmat OM = E*I;
-
-	ddmat FM_up_T_dagg = FM_up_T.adjoint();
-	ddmat FM_dn_T_dagg = FM_dn_T.adjoint();
-	ddmat GR_up = gs(OMup, FM_up_T_dagg);
-	ddmat GR_dn = gs(OMdn, FM_dn_T_dagg);
-	ddmat FM_NM_up_T_dagg = FM_NM_up_T.adjoint();
-	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
-	ddmat NM_T_dagg = NM_T.adjoint();
+	/* ddmat FM_up_T_dagg = FM_up_T.adjoint(); */
+	/* ddmat FM_dn_T_dagg = FM_dn_T.adjoint(); */
+	/* ddmat GR_up = gs(OMup, FM_up_T_dagg); */
+	/* ddmat GR_dn = gs(OMdn, FM_dn_T_dagg); */
+	/* ddmat GR_up = gs(OM-NM, NM_T_dagg); */
+	/* ddmat GR_up = gs(OM-ins, ins_T_dagg); */
+	/* ddmat GR_dn = GR_up; */
+	/* ddmat FM_NM_up_T_dagg = FM_NM_up_T.adjoint(); */
+	/* ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint(); */
 	
-	/* //this for trilayer */
-	/* ddmat GL_up = gs(OMup, FM_T); */
-	/* ddmat GL_dn = gs(OMdn, FM_T); */
+	/* ddmat GL_up = gs(OM - NM, NM_T); */
+	/* ddmat GL_up = gs(OM - ins, ins_T); */
+	/* ddmat GL_dn = GL_up; */
+	/* ddmat GL_up = gs(OMup, FM_up_T); */
+	/* ddmat GL_dn = gs(OMdn, FM_dn_T); */
 
-	//this below block for 5 layer
-	ddmat GL_up_even = gs(OM - NM, NM_T);
-	ddmat GL_dn_even = GL_up_even;
-	//this below block for 5 layer
-//lim is thickness of layer 2
-	const int lim = send->lim;
-	double lim2 = send->lim2;
-	ddmat ins_T_dagg = ins_T.adjoint();
-	ddmat ins_NM_T_dagg = ins_NM_T.adjoint();
-//build thickness of layer 2 to lim layers
-	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites
-		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer)
-		if (it == 0){
-			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse();
-			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse();
-		}
-		else {
-			GL_up_even = (OM - ins -ins_NM_T_dagg*GL_up_even*ins_NM_T).inverse();
-			GL_dn_even = (OM - ins -ins_NM_T_dagg*GL_dn_even*ins_NM_T).inverse();
-		}
-	}
-//lim2 is thickness of layer 3
-//build thickness of layer 3 to lim2 layers
-	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse();
-	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse();
-	for (int it=0; it < lim2 - 1; ++it){
-		GL_up_even = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up_even*FM_up_T).inverse();
-		GL_dn_even = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn_even*FM_dn_T).inverse();
-	}
+	/* dddmat T; */
+	/* T.fill(0.); */
+	/* T.topLeftCorner(18,18) = ins_T; */
+	/* T.bottomRightCorner(18,18) = ins_T; */
+	/* T.topLeftCorner(18,18) = NM_T; */
+	/* T.bottomRightCorner(18,18) = NM_T; */
+	/* T.topLeftCorner(18,18) = FM_up_T; */
+	/* T.bottomRightCorner(18,18) = FM_dn_T; */
+	/* dddmat Tdagg = T.adjoint(); */
+	/* GR.topLeftCorner(18,18) = GR_up; */
+	/* GR.bottomRightCorner(18,18) = GR_dn; */
+	/* GL.topLeftCorner(18,18) = GL_up; */
+	/* GL.bottomRightCorner(18,18) = GL_dn; */
+	/* cout<<GL.trace()<<" "<<GR.trace()<<endl; */
+	/* dddmat GRinv = GR.inverse(); */
+	/* dddmat GNinv = GRinv - Tdagg*GL*T; */
+	/* dddmat GN = GNinv.inverse(); */
+	ddmat GRinv = GR.inverse();
+	ddmat GNinv = GRinv - ins_T_dagg*GL*ins_T;
+	ddmat GN = GNinv.inverse();
 
-	ddmat odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint();
-	ddmat odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint();
-	ddmat odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint();
-	ddmat odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint();
-	ddmat GL_up_odd = GL_up_even;
-	ddmat GL_dn_odd = GL_dn_even;
-	//adlayer one bilayer onto LHS G_even to ensure gmean is correct
-	//this means 2 layers are on before we begin!
-	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse();
-	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse();
-	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a 
-	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin!
-	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse();
-	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse();
-	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse();
-	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse();
-
-	//initialise integration so that they don't all get summed over every E!
-	for (int ll = 0; ll < N; ll++){
-		if (needi[ll] == 1)
-			fm[ll + k] = 0.;
-	}
-	const int n = 10;
-	/* const int n = 1; */
-	for (int kk=0; kk<n+1; kk++) {
-		theta = kk*M_PI/n;
-		f(result, theta, E, k, needi, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
-		if ((kk==0)||(kk==n)){
-			for (int ll = 0; ll < N; ll++){
-				if (needi[ll] == 1)
-					fm[ll + k] += M_PI*(0.5/n)*result[ll];
-			}
-		}
-		else {
-			for (int ll = 0; ll < N; ll++){
-				if (needi[ll] == 1)
-					fm[ll + k] += (M_PI/n)*result[ll];
-			}
-		}
-	}	
-	/* NAG_FREE(result); */
+	return -imag(GN.trace());
 }
 
-void pass(const double E[], Integer nx, Integer ldfm, double * fm, Integer * needi, variables * send) {
-	dcomp E_send;
-	dcomp im = -1;
-	im = sqrt(im);
-	int ksd;
-	for (int k = 0; k < nx; k++){
-		/* cout<<setprecision(8)<<E[k]<<endl; */
-		E_send = E[k] + 1e-6*im;//TODO Andrey has 1e-8 here
-		ksd = k*ldfm;
-		int_theta_E(E_send, ksd, fm, needi, send);
-	}
-}
-
-vector<double> int_energy(variables * send) {
-	Integer irevcm, lcmax, lcmin, lcom, ldfm, ldfmrq,
-       		lenx, lenxrq, licmax, licmin, licom, liopts, lopts, ni, nx,
-       		sdfm, sdfmrq, sid;
-	  /* Arrays */
-	char cvalue[17];
-	double *com = 0, *dinest = 0, *errest = 0, *fm = 0, *opts = 0, *x = 0;
-	Integer *icom = 0, *iopts = 0, *needi = 0;
-
-	  /* NAG types */
-	Nag_VariableType optype;
-	NagError fail;
-
-	  /* Setup phase. */
-	  /* Set problem parameters. */
-	ni = send->N;
-	double Ef = send->Ef;
-	double left = Ef;
-	double right = Ef - send->V;
-
-	double b = max(left,right) + 0.04375;
-	double a = min(left,right) - 0.04375;
-	
-	liopts = 100;
-	lopts = 100;
-	if (!(opts = NAG_ALLOC((lopts), double)) || !(iopts = NAG_ALLOC((liopts), Integer))){
-		cout<<"Allocation failure"<<endl;
-		exit(EXIT_FAILURE);
-	}
-
-	INIT_FAIL(fail);
-	/* Initialize option arrays using nag_quad_opt_set (d01zkc). */
-	nag_quad_opt_set("Initialize = nag_quad_1d_gen_vec_multi_rcomm", iopts, liopts, opts, lopts, &fail);
-	if (fail.code != NE_NOERROR) {
-		cout<<"Error from nag_quad_opt_set (d01zkc)."<<endl<<fail.message<<endl;
-		exit(EXIT_FAILURE);
-	}
-	nag_quad_opt_set("Quadrature Rule = gk15", iopts, liopts, opts, lopts, &fail);
-	/* nag_quad_opt_set("Quadrature Rule = gk21", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk31", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); */
-	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
-	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
-
-	/* Determine required array dimensions for
-	 * nag_quad_1d_gen_vec_multi_rcomm (d01rac) using
-	 * nag_quad_1d_gen_vec_multi_dimreq (d01rcc).
-	 */
-	nag_quad_1d_gen_vec_multi_dimreq(ni, &lenxrq, &ldfmrq, &sdfmrq, &licmin, &licmax, &lcmin, &lcmax,
-                                   iopts, opts, &fail);
-	if (fail.code != NE_NOERROR) {
-		cout<<"Error from nag_quad_1d_gen_vec_multi_dimreq (d01rcc)."<<endl<<fail.message<<endl;
-		exit(EXIT_FAILURE);
-	}
-	ldfm = ldfmrq;
-	sdfm = sdfmrq;
-	lenx = lenxrq;
-	licom = licmax;
-	lcom = lcmax;
-
-	/* Allocate remaining arrays. */
-	if (!(x = NAG_ALLOC((lenx), double)) ||	!(needi = NAG_ALLOC((ni), Integer)) || !(fm = NAG_ALLOC((ldfm) * (sdfm), double)) ||
-		!(dinest = NAG_ALLOC((ni), double)) || !(errest = NAG_ALLOC((ni), double)) ||
-	       	!(com = NAG_ALLOC((lcom), double)) || !(icom = NAG_ALLOC((licom), Integer))){
-		cout<<"Allocation failure"<<endl;
-		exit(EXIT_FAILURE);
-	}
-
-	/* Solve phase. */
-	INIT_FAIL(fail);
-	/* Set initial irevcm. */
-	irevcm = 1;
-	while (irevcm) {
-		/* nag_quad_1d_gen_vec_multi_rcomm (d01rac).
-		 * One-dimensional quadrature, adaptive, vectorized, multi-integral,
-		 * reverse communication.
-		 */
-		nag_quad_1d_gen_vec_multi_rcomm(&irevcm, ni, a, b, &sid, needi, x, lenx, &nx, fm, ldfm,
-                                    dinest, errest, iopts, opts, icom, licom, com, lcom, &fail);
-		switch (irevcm) {
-			case 11:
-				/* Initial returns.
-				 * These will occur during the non-adaptive phase.
-				 * All values must be supplied.
-				 * dinest and errest do not contain approximations over the complete
-			 	 * interval at this stage.
-				 */
-				pass(x, nx, ldfm, fm, needi, send);
-				break;
-			case 12:
-				/* Intermediate returns.
-				 * These will occur during the adaptive phase.
-				 * All requested values must be supplied.
-				 * dinest and errest contain approximations over the complete
-				 * interval at this stage.
-				 */
-				pass(x, nx, ldfm, fm, needi, send);
-				break;
-		}
-	}
-	if (fail.code != NE_NOERROR)
-		cout<<"For x = "<<send->x<<", z = "<<send->z<<" "<<fail.message<<endl<<endl;
-
-	vector<double> result;
-	result.reserve(ni);
-	for (int kk = 0; kk < ni; kk++)
-		result.emplace_back(dinest[kk]);
-	NAG_FREE(com);
-	NAG_FREE(dinest);
-	NAG_FREE(errest);
-	NAG_FREE(fm);
-	NAG_FREE(opts);
-	NAG_FREE(x);
-	NAG_FREE(icom);
-	NAG_FREE(iopts);
-	NAG_FREE(needi);
-	return result;
-}
-
-vector<double> switching(variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below
+double switching(double e, variables * send) {//TODO we need to check that spin up/down is catered for in the Hams below
 	double x = send->x;
 	double z = send->z;
 	vec3 Fe_basis = *send->Fe_basis;
@@ -1025,46 +938,47 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	send->ins_FM_up_T = &ins_FM_up_T;
 	send->ins_FM_dn_T = &ins_FM_dn_T;
 
-	vector<double> result1, result2, integrate;
+	/* vector<double> result1, result2, integrate; */
+	double integrate;
 	int N = send->N;
 	double V = send->V;
-	result1.reserve(N);
-	if (abs(V) > 1e-9)
-		result1 = int_energy(send);
-	else {
-		for (int l = 0; l < N; l++)
-			result1[l] = 0.;
-	}
-	integrate.reserve(N);
-	result2.reserve(N);
-	for (int l = 0; l < N; l++)
-		result2[l] = 0.;
+	/* result1.reserve(N); */
+	/* if (abs(V) > 1e-9) */
+	/* 	result1 = int_energy(send); */
+	/* else { */
+	/* 	for (int l = 0; l < N; l++) */
+	/* 		result1[l] = 0.; */
+	/* } */
+	/* result2.reserve(N); */
+	/* for (int l = 0; l < N; l++) */
+	/* 	result2[l] = 0.; */
 	dcomp i;
 	i = -1.;
 	i = sqrt(i);
-	dcomp E = 0.;
-	double kT = send->kT;
-	for (int j=0; j!=15; j++){
-		E = send->Ef + (2.*j + 1.)*kT*M_PI*i;
+	dcomp E = e + i*1e-5;
+	/* double kT = send->kT; */
+	/* for (int j=0; j!=15; j++){ */
+	/* 	E = send->Ef + (2.*j + 1.)*kT*M_PI*i; */
 		integrate = int_theta(E, send);
-		if (abs(V) < 1e-9){
-			for (int l = 0; l < N; l++)
-				result2[l] += 2.*kT*integrate[l]; 
-		}
-		else {
-			for (int l = 0; l < N; l++)
-				result2[l] += kT*integrate[l]; 
-			E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i;
-			integrate = int_theta(E, send);
-			for (int l = 0; l < N; l++)
-				result2[l] += kT*integrate[l]; 
-		}
-	}
-	vector<double> total;
-	total.reserve(N);
-	for (int l = 0; l < N; l++)
-		total[l] = result1[l] + result2[l];
-	return total;
+		/* if (abs(V) < 1e-9){ */
+		/* 	for (int l = 0; l < N; l++) */
+		/* 		result2[l] += 2.*kT*integrate[l]; */ 
+		/* } */
+		/* else { */
+		/* 	for (int l = 0; l < N; l++) */
+		/* 		result2[l] += kT*integrate[l]; */ 
+		/* 	E = send->Ef - V + (2.*j + 1.)*kT*M_PI*i; */
+		/* 	integrate = int_theta(E, send); */
+		/* 	for (int l = 0; l < N; l++) */
+		/* 		result2[l] += kT*integrate[l]; */ 
+		/* } */
+	/* } */
+	/* vector<double> total; */
+	/* total.reserve(N); */
+	/* for (int l = 0; l < N; l++) */
+	/* 	total[l] = result1[l] + result2[l]; */
+	return integrate;
+	/* return total; */
 }
 
 int main() 
@@ -1074,7 +988,7 @@ int main()
 	// number of spacer layers
 	int N = 10;
 	// set bias
-	double V = 0.05;
+	double V = 0.00;
 	//set number of insulator principle layers
 	int lim = 2;//remember in halite structures the two basis atoms are on the same plane
 	//set number of RH FM bilayers
@@ -1266,9 +1180,8 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(O1, x, y, z);
-					oxide_11.emplace_back(tmp_mat);
 					tmp_mat = eint1(Mg1, x, y, z);
+					oxide_11.emplace_back(tmp_mat);
 					magnesium_11.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_nnn_dist + 1e-3){
@@ -1276,9 +1189,8 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(O2, x, y, z);
+					tmp_mat = eint1(Mg_O2, x, y, z);
 					oxide_11.emplace_back(tmp_mat);
-					tmp_mat = eint1(Mg2, x, y, z);
 					magnesium_11.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_nnnn_dist + 1e-3){
@@ -1286,9 +1198,8 @@ int main()
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
 					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
-					tmp_mat = eint1(O3, x, y, z);
-					oxide_11.emplace_back(tmp_mat);
 					tmp_mat = eint1(Mg3, x, y, z);
+					oxide_11.emplace_back(tmp_mat);
 					magnesium_11.emplace_back(tmp_mat);
 				}
 
@@ -1898,125 +1809,6 @@ int main()
 		}
 	}
 
-	/* cout<<"MgO topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_11, MgO_basis[0], oxide_11, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO topRight"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_12, MgO_basis[1], oxide_12, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_21,  - MgO_basis[1], oxide_21, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"MgO topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_11, MgO_lat_oop + MgO_basis[0], oxide_11, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO topRight"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_12, MgO_lat_oop + MgO_basis[1], oxide_12, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_pos_21, MgO_lat_oop - MgO_basis[1], oxide_21, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Au topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, Au_basis[0], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, Au_basis[1], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, - Au_basis[1], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Au topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, Au_lat_oop + Au_basis[0], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, Au_lat_oop + Au_basis[1], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_pos, Au_lat_oop - Au_basis[1], gold, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Fe topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, Fe_basis[0], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, Fe_basis[1], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, - Fe_basis[1], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Fe topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[0], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop + Fe_basis[1], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_pos, Fe_lat_oop - Fe_basis[1], iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Fe - Au topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[0], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[0], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[0] - Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH( Fe_Au_pos, lat_Fe_Au + Au_basis[1] - Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Au - Fe topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[1], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - Fe bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH( Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[1], gold_iron_up, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"MgO - Fe topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_Fe_pos_11, lat_MgO_Fe - MgO_basis[0] + Fe_basis[0], iron_up_MgO_11, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO - Fe topRight"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_Fe_pos_12, lat_MgO_Fe - MgO_basis[0] + Fe_basis[1], iron_up_MgO_12, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO - Fe bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_Fe_pos_21, lat_MgO_Fe - MgO_basis[1] + Fe_basis[0], iron_up_MgO_21, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"MgO - Fe bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH( MgO_Fe_pos_22, lat_MgO_Fe - MgO_basis[1] + Fe_basis[1], iron_up_MgO_22, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Au - MgO topLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_MgO_pos_11, lat_Au_MgO + MgO_basis[0] - Au_basis[0], gold_MgO_11, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - MgO topRight"<<endl; */
-	/* tmp_mat = InPlaneH( Au_MgO_pos_12, lat_Au_MgO + MgO_basis[1] - Au_basis[0], gold_MgO_12, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - MgO bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH( Au_MgO_pos_21, lat_Au_MgO + MgO_basis[0] - Au_basis[1], gold_MgO_21, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Au - MgO bottomRight"<<endl; */
-	/* tmp_mat = InPlaneH(Au_MgO_pos_22, lat_Au_MgO + MgO_basis[1] - Au_basis[1], gold_MgO_22, 2.53, 2.53); */
-	/* cout<<endl; */
-
-	/* cout<<"Fe - Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Fe_Au_pos, lat_vec1 + lat_vec2 + lat_Fe_Au - Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-	/* cout<<"Fe - Au bottomLeft"<<endl; */
-	/* tmp_mat = InPlaneH(Fe_Au_pos, -lat_vec1 - lat_vec2 -lat_Fe_Au + Fe_basis[1], iron_gold_up, 2.53, 2.53); */
-	/* cout<<endl; */
-
       vector<string> atname;
       atname.reserve(4);
       atname.emplace_back("Fe");
@@ -2194,8 +1986,7 @@ int main()
 	send.lim2 = lim2;
 	send.N = N;
 
-	vector<double> answer;
-	answer.reserve(N);
+	double answer;
 
 	time_t now = time(0);
 	tm *ltm = localtime(&now);
@@ -2208,67 +1999,63 @@ int main()
 
 	ofstream Myfile;	
 
-	if (abs(V) < 1e-4)
-		Mydata += "-Keldysh_V0.txt";
-	else
-		Mydata += "-Keldysh_V.txt";
-	answer = switching(&send);
+	Mydata += "-MgO_DOS.txt";
+	/* answer = switching(&send); */
 
-	/* vector<double> result; */
-	/* vector<double> integrate; */
-	/* result.reserve(N); */
-	/* integrate.reserve(N); */
-	/* for (int i = 0; i < N; i++) */
-	/* 	result[i] = 0.; */
-	/* /1* int n = 350;//set the number of k-points along x axis *1/ */
-	/* int n = 2;//set the number of k-points along x axis */
-	/* int counter2 = 0; */
-	/* double factor = 2./(n*n); */
-	/* int sumk = n*(n + 1)/2; */
-	/* int p, q; */
-	/* int product1; */
-	/* int myid, numprocs; */
-	/* time_t timer; */
-	/* int kk, l, i; */
-	/* int start_time = time(&timer); */
-	/* MPI_Init(NULL,NULL); */
-	/* MPI_Comm_size(MPI_COMM_WORLD, &numprocs); */
-	/* MPI_Comm_rank(MPI_COMM_WORLD, &myid); */
-	/* for (kk = 2*myid + 1; kk<2*sumk; kk+=2*numprocs){ */
-	/* 	for (l = 0; l < n; l++){ */
-	/* 		product1 = (2*n - l)*(l + 1); */
-	/* 		if ( kk < product1){ */
-	/* 			p = 2*(kk/(2*n - l)) + 1; */
-	/* 			q = (l*(l + 1) + kk)%(2*n); */
-	/* 			break; */
-	/* 		} */
-	/* 	} */
-	/* 	send.x = M_PI*(p + q)/(2*n);//this translates the grid for fcc 1st BZ */
-	/* 	send.z = M_PI*(p - q)/(2*n);//this translates the grid for fcc 1st BZ */
-	/* 	integrate = switching(&send); */
-	/* 	for (i = 0; i < N; i++){ */
-	/* 		if ((p==1) && (q==1)) */
-	/* 			result[i] += factor*0.5*integrate[i]; */
-	/* 		else if (p==q) */
-	/* 			result[i] += factor*0.5*integrate[i]; */
-	/* 		else */
-	/* 			result[i] += factor*integrate[i]; */
-	/* 	} */
-	/* 	counter2++; */
-	/* } */
-	/* cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl; */
-	/* cout<<"process "<<myid<<" performed "<<counter2<<" computations"<<endl; */
-	/* for (i = 0; i < N; i++) */
-	/* 	MPI_Reduce(&result[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD); */
-	/* if (myid == 0){ */
+	Myfile.open( Mydata.c_str(),ios::trunc );
+	double result;
+	double integrate;
+	/* int n = 350;//set the number of k-points along x axis */
+	int n = 35;//set the number of k-points along x axis
+	int counter2 = 0;
+	double factor = 2./(n*n);
+	int sumk = n*(n + 1)/2;
+	int p, q;
+	int product1;
+	int myid, numprocs;
+	time_t timer;
+	int kk, l, i;
+	myid = 0;
+	numprocs = 1;
 
-		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
-		Myfile.open( Mydata.c_str(),ios::trunc );
-		for (int i = 0; i < N; i++)
-			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
+	double start = -0.4;
+	double end = 1.1;
+	double step = 0.0026;
+	double area = 8*M_PI*M_PI;
 
-	/* } */
-	/* MPI_Finalize(); */
+	for (double j = start; j<end + step; j=j+step){
+		/* int start_time = time(&timer); */
+		/* MPI_Init(NULL,NULL); */
+		/* MPI_Comm_size(MPI_COMM_WORLD, &numprocs); */
+		/* MPI_Comm_rank(MPI_COMM_WORLD, &myid); */
+		result = 0.;
+		for (kk = 2*myid + 1; kk<2*sumk; kk+=2*numprocs){
+			for (l = 0; l < n; l++){
+				product1 = (2*n - l)*(l + 1);
+				if ( kk < product1){
+					p = 2*(kk/(2*n - l)) + 1;
+					q = (l*(l + 1) + kk)%(2*n);
+					break;
+				}
+			}
+			send.x = M_PI*(p + q)/(2*n);//this translates the grid for fcc 1st BZ
+			send.z = M_PI*(p - q)/(2*n);//this translates the grid for fcc 1st BZ
+			integrate = switching(j, &send);
+			if ((p==1) && (q==1))
+				result += factor*0.5*integrate;
+			else if (p==q)
+				result += factor*0.5*integrate;
+			else
+				result += factor*integrate;
+			counter2++;
+		}
+		/* cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl; */
+		/* cout<<"process "<<myid<<" performed "<<counter2<<" computations"<<endl; */
+		/* MPI_Reduce(&result, &answer, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD); */
+		/* if (myid == 0) */
+		Myfile<<scientific<<j<<" "<<result/(M_PI*area)<<endl;
+		/* MPI_Finalize(); */
+	}
 
 	return 0;
 }
