@@ -23,6 +23,15 @@ double gmean(double x, double y){
  	return gmean;
 }
 
+double gmean(double x, double y, double atxdist, double atydist, double atxydist, double order){
+	double potx, poty;
+	potx = x*pow(atxdist, order);
+	poty = y*pow(atydist, order);
+	double potxy = gmean(potx, poty);
+	double gmean = potxy/(1.*pow(atxydist, order));
+	return gmean;
+}
+
 Matrix<complex<double>, 9, 9> eint1(vector<double> vec, double x, double y, double z)
 {
 //     THIS ROUTINE IS SPIN DEPENDENT :-
@@ -143,35 +152,37 @@ Matrix<complex<double>, 9, 9> U(int numat, int isp){
 
       double ryd=13.6058;
       double s0, p0, d0t, d0e;
-      double ef=0.57553;//TODO isn't this the Papa Fermi level of Cu..?
+      /* double ef=0.57553;//TODO isn't this the Papa Fermi level of Cu..? */
+      double ef=0.7466;//fermi level of Fe as calculated by me
+      double Au_ef = 0.5074;// calculated by me
 //    dee=2.1         //   approximately reproduces Yuassas results
       double dee=3.5;         //   classic
-      double xmgo_shift=ef-dee/ryd;
+      double xmgo_shift=-dee/ryd;
       //TODO Papa Fermi level of Au = 0.5380
       if (numat == 1){//TODO need to figure out relative Fermi shifts
        	      //     BULK Fe up:
 	      if (isp == 1){
-      		s0 =  1.13516;
-	      	p0 =  1.81739;
-      		d0t = 0.64840;
-      		d0e = 0.62960;
+      		s0 =  1.13516 - ef;
+	      	p0 =  1.81739 - ef;
+      		d0t = 0.64840 - ef;
+      		d0e = 0.62960 - ef;
 	      }
 	      //     BULK Fe down:
 	      else if (isp == 0){
-      		s0 =  1.14481;
-      		p0 =  1.80769;
-      		d0t = 0.78456;
-      		d0e = 0.75661;
+      		s0 =  1.14481 - ef;
+      		p0 =  1.80769 - ef;
+      		d0t = 0.78456 - ef;
+      		d0e = 0.75661 - ef;
 	      }
 	      else
 		      cout<<"Warning, selection not recognised in function 'U'"<<endl;
       }
       //Au
       else if (numat == 2){
-	      s0 = 0.56220;
-	      p0 = 1.27897;
-	      d0t = 0.26097;
-	      d0e = 0.25309;
+	      s0 = 0.56220 - Au_ef;
+	      p0 = 1.27897 - Au_ef;
+	      d0t = 0.26097 - Au_ef;
+	      d0e = 0.25309 - Au_ef;
       }
 //     Mg :
       else if (numat == 3){	

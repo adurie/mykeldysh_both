@@ -1070,7 +1070,7 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 int main() 
 {
 	// plot output of spincurrent against energy
-	const double Ef = 0.57553;//TODO
+	const double Ef = 0.;//set Fermi level to zero throughout in header file
 	// number of spacer layers
 	int N = 10;
 	// set bias
@@ -1098,58 +1098,6 @@ int main()
 	Au = U(2,0);
 	Mg = U(3,0);
 	O = U(4,0);
-	vector<double> AuMg1, AuMg2, AuMg3, AuO1, AuO2, AuO3, MgFe_u1, MgFe_u2, MgFe_u3, MgFe_d1, MgFe_d2,
-		MgFe_d3, FeAu_u1, FeAu_u2, FeAu_u3, FeAu_d1, FeAu_d2, FeAu_d3, Mg_O2;
-	AuMg1.reserve(10); AuMg2.reserve(10); AuMg3.reserve(10); AuO1.reserve(10); AuO2.reserve(10);
-	AuO3.reserve(10); MgFe_u1.reserve(10); MgFe_u2.reserve(10); MgFe_u3.reserve(10); MgFe_d1.reserve(10); 
-	MgFe_d2.reserve(10); MgFe_d3.reserve(10); FeAu_u1.reserve(10); FeAu_u2.reserve(10); FeAu_u3.reserve(10);
-	FeAu_d1.reserve(10); FeAu_d2.reserve(10); FeAu_d3.reserve(10); Mg_O2.reserve(10);
-	vector<double> zilch;
-	zilch.reserve(10);
-	for (int zz = 0; zz < 10; zz++)
-		zilch.emplace_back(0.);
-	double tmp;
-	//This loop creates the geometric means used at the interfaces between elements
-	for (int k = 0; k < 10; k++){
-		tmp = gmean(Au1[k], Mg1[k]);
-		AuMg1.emplace_back(tmp);
-		tmp = gmean(Au2[k], Mg2[k]);
-		AuMg2.emplace_back(tmp);
-		tmp = gmean(zilch[k], Mg3[k]);
-		AuMg3.emplace_back(tmp);
-		tmp = gmean(Au1[k], O1[k]);
-		AuO1.emplace_back(tmp);
-		tmp = gmean(Au2[k], O2[k]);
-		AuO2.emplace_back(tmp);
-		tmp = gmean(zilch[k], O3[k]);
-		AuO3.emplace_back(tmp);
-		tmp = gmean(Mg1[k], Fe_u1[k]);
-		MgFe_u1.emplace_back(tmp);
-		tmp = gmean(Mg2[k], Fe_u2[k]);
-		MgFe_u2.emplace_back(tmp);
-		tmp = gmean(Mg3[k], Fe_u3[k]);
-		MgFe_u3.emplace_back(tmp);
-		tmp = gmean(Mg1[k], Fe_d1[k]);
-		MgFe_d1.emplace_back(tmp);
-		tmp = gmean(Mg2[k], Fe_d2[k]);
-		MgFe_d2.emplace_back(tmp);
-		tmp = gmean(Mg3[k], Fe_d3[k]);
-		MgFe_d3.emplace_back(tmp);
-		tmp = gmean(Au1[k], Fe_u1[k]);
-		FeAu_u1.emplace_back(tmp);
-		tmp = gmean(Au2[k], Fe_u2[k]);
-		FeAu_u2.emplace_back(tmp);
-		tmp = gmean(zilch[k], Fe_u3[k]);
-		FeAu_u3.emplace_back(tmp);
-		tmp = gmean(Au1[k], Fe_d1[k]);
-		FeAu_d1.emplace_back(tmp);
-		tmp = gmean(Au2[k], Fe_d2[k]);
-		FeAu_d2.emplace_back(tmp);
-		tmp = gmean(zilch[k], Fe_d3[k]);
-		FeAu_d3.emplace_back(tmp);
-		tmp = gmean(Mg2[k], O2[k]);
-		Mg_O2.emplace_back(tmp);
-	}
 
 	//in-plane lattice vectors for the whole system;
 	Vector3d lat_vec1, lat_vec2;
@@ -1217,17 +1165,96 @@ int main()
 	/* ins_met_lat_oop << 0., 0.6393, 0.;// this from LiCl paper detailing distance between LiCl and Co/Cu. */
 
 	double Au_Fe_nn, Au_Fe_nnn, Au_Fe_nnnn, Au_MgO_nn, Au_MgO_nnn, Au_MgO_nnnn, MgO_Fe_nn, MgO_Fe_nnn, MgO_Fe_nnnn;
+	double Au_Fe_close_nnn, Au_Fe_close_nnnn, MgO_Fe_close_nnnn;
 	Au_Fe_nn = 0.670012;
 	Au_Fe_nnn = 0.946;//this is the larger of the two, as Fe to Au basis 1 is 0.7996 TODO is this right..?
 	Au_Fe_nnnn = 1.181066;//this is the larger of the two, as the smaller is 1.06737; TODO is this right..?
+	Au_Fe_close_nnn = 0.7996;//see above
+	Au_Fe_close_nnnn = 1.06737;//see above
 	Au_MgO_nn = 0.605; // Au to O;
 	Au_MgO_nnn = 0.784873;//Au to Mg
 	Au_MgO_nnnn = 0.930605;//Au to O;
 	MgO_Fe_nn = 0.505;//O to Fe
 	MgO_Fe_nnn = 0.710652;//Mg to Fe
 	MgO_Fe_nnnn = 0.868922;//O to Fe, but need to include the fact that basis 2 Fe is 0.8585534 from Mg!
+	MgO_Fe_close_nnnn = 0.8585534;//see above
 	//TODO be aware that the code takes advantage of the fact that only second NN hoppings are different between
 	//Mg and O... the code will break if this changes
+
+	vector<double> AuMg1, AuMg2, AuMg3, AuO1, AuO2, AuO3, MgFe_u1, MgFe_u2, MgFe_u3, MgFe_d1, MgFe_d2,
+		MgFe_d3, FeAu_u1, FeAu_u2, FeAu_u3, FeAu_d1, FeAu_d2, FeAu_d3, Mg_O2, FeAu_close_d2, FeAu_close_u2,
+		FeAu_close_d3, FeAu_close_u3, MgFe_close_d3, MgFe_close_u3;
+	AuMg1.reserve(10); AuMg2.reserve(10); AuMg3.reserve(10); AuO1.reserve(10); AuO2.reserve(10);
+	AuO3.reserve(10); MgFe_u1.reserve(10); MgFe_u2.reserve(10); MgFe_u3.reserve(10); MgFe_d1.reserve(10); 
+	MgFe_d2.reserve(10); MgFe_d3.reserve(10); FeAu_u1.reserve(10); FeAu_u2.reserve(10); FeAu_u3.reserve(10);
+	FeAu_d1.reserve(10); FeAu_d2.reserve(10); FeAu_d3.reserve(10); Mg_O2.reserve(10); FeAu_close_d2.reserve(10);
+	FeAu_close_u2.reserve(10); FeAu_close_d3.reserve(10); FeAu_close_u3.reserve(10); MgFe_close_d3.reserve(10);
+	MgFe_close_u3.reserve(10);
+	vector<double> zilch;
+	zilch.reserve(10);
+	for (int zz = 0; zz < 10; zz++)
+		zilch.emplace_back(0.);
+	double tmp;
+	double order;
+	//This loop creates the geometric means used at the interfaces between elements
+	for (int k = 0; k < 10; k++){
+		if (k < 4)//this block gives the Harrison formula for the distance dependence of the SK potentials
+			order = 2.;//TODO it appears that in order for the distance scaling to be as accurate as possible,
+		else if (k < 7)// that I will need to consider both nn distances per basis (detailed above) so that essentially
+			order = 3.5;// I have twice the number of potentials, with each 9x9 submatrix being unique. This will
+		else // mean that the loops below will need to be carefully altered to allow each case.
+			order = 5.;//this has now been implemented
+		tmp = gmean(Au1[k], Mg1[k], Au_nn_dist, MgO_nn_dist, Au_MgO_nn, order);
+		AuMg1.emplace_back(tmp);
+		tmp = gmean(Au2[k], Mg2[k], Au_nnn_dist, MgO_nnn_dist, Au_MgO_nnn, order);
+		AuMg2.emplace_back(tmp);
+		tmp = gmean(zilch[k], Mg3[k], Au_nnnn_dist, MgO_nnnn_dist, Au_MgO_nnnn, order);
+		AuMg3.emplace_back(tmp);
+		tmp = gmean(Au1[k], O1[k], Au_nn_dist, MgO_nn_dist, Au_MgO_nn, order);
+		AuO1.emplace_back(tmp);
+		tmp = gmean(Au2[k], O2[k], Au_nnn_dist, MgO_nnn_dist, Au_MgO_nnn, order);
+		AuO2.emplace_back(tmp);
+		tmp = gmean(zilch[k], O3[k], Au_nnnn_dist, MgO_nnnn_dist, Au_MgO_nnnn, order);
+		AuO3.emplace_back(tmp);
+		tmp = gmean(Mg1[k], Fe_u1[k], MgO_nn_dist, Fe_nn_dist, MgO_Fe_nn, order);
+		MgFe_u1.emplace_back(tmp);
+		tmp = gmean(Mg2[k], Fe_u2[k], MgO_nnn_dist, Fe_nnn_dist, MgO_Fe_nnn, order);
+		MgFe_u2.emplace_back(tmp);
+		tmp = gmean(Mg3[k], Fe_u3[k], MgO_nnnn_dist, Fe_nnnn_dist, MgO_Fe_nnnn, order);
+		MgFe_u3.emplace_back(tmp);
+		tmp = gmean(Mg3[k], Fe_u3[k], MgO_nnnn_dist, Fe_nnnn_dist, MgO_Fe_close_nnnn, order);
+		MgFe_close_u3.emplace_back(tmp);
+		tmp = gmean(Mg1[k], Fe_d1[k], MgO_nn_dist, Fe_nn_dist, MgO_Fe_nn, order);
+		MgFe_d1.emplace_back(tmp);
+		tmp = gmean(Mg2[k], Fe_d2[k], MgO_nnn_dist, Fe_nnn_dist, MgO_Fe_nnn, order);
+		MgFe_d2.emplace_back(tmp);
+		tmp = gmean(Mg3[k], Fe_d3[k], MgO_nnnn_dist, Fe_nnnn_dist, MgO_Fe_nnnn, order);
+		MgFe_d3.emplace_back(tmp);
+		tmp = gmean(Mg3[k], Fe_d3[k], MgO_nnnn_dist, Fe_nnnn_dist, MgO_Fe_close_nnnn, order);
+		MgFe_close_d3.emplace_back(tmp);
+		tmp = gmean(Au1[k], Fe_u1[k], Au_nn_dist, Fe_nn_dist, Au_Fe_nn, order);
+		FeAu_u1.emplace_back(tmp);
+		tmp = gmean(Au2[k], Fe_u2[k], Au_nnn_dist, Fe_nnn_dist, Au_Fe_nnn, order);
+		FeAu_u2.emplace_back(tmp);
+		tmp = gmean(Au2[k], Fe_u2[k], Au_nnn_dist, Fe_nnn_dist, Au_Fe_close_nnn, order);
+		FeAu_close_u2.emplace_back(tmp);
+		tmp = gmean(zilch[k], Fe_u3[k], Au_nnnn_dist, Fe_nnnn_dist, Au_Fe_nnnn, order);
+		FeAu_u3.emplace_back(tmp);
+		tmp = gmean(zilch[k], Fe_u3[k], Au_nnnn_dist, Fe_nnnn_dist, Au_Fe_close_nnnn, order);
+		FeAu_close_u3.emplace_back(tmp);
+		tmp = gmean(Au1[k], Fe_d1[k], Au_nn_dist, Fe_nn_dist, Au_Fe_nn, order);
+		FeAu_d1.emplace_back(tmp);
+		tmp = gmean(Au2[k], Fe_d2[k], Au_nnn_dist, Fe_nnn_dist, Au_Fe_nnn, order);
+		FeAu_d2.emplace_back(tmp);
+		tmp = gmean(Au2[k], Fe_d2[k], Au_nnn_dist, Fe_nnn_dist, Au_Fe_close_nnn, order);
+		FeAu_close_d2.emplace_back(tmp);
+		tmp = gmean(zilch[k], Fe_d3[k], Au_nnnn_dist, Fe_nnnn_dist, Au_Fe_nnnn, order);
+		FeAu_d3.emplace_back(tmp);
+		tmp = gmean(zilch[k], Fe_d3[k], Au_nnnn_dist, Fe_nnnn_dist, Au_Fe_close_nnnn, order);
+		FeAu_close_d3.emplace_back(tmp);
+		tmp = gmean(Mg2[k], O2[k]);
+		Mg_O2.emplace_back(tmp);
+	}
 
 	//This section generates the Hamiltonians from SK parameters and NN positions
 	double x, y, z;
@@ -1251,7 +1278,6 @@ int main()
 		for (int i2 = -2; i2 < 3; i2++){
 			for (int i3 = -1; i3 < 2; i3++){
 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[0];
-				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
 				distance = 0;
 				for (int l = 0; l < 3; l++)
 					distance += tmp_vec(l)*tmp_vec(l);
@@ -1293,7 +1319,6 @@ int main()
 				}
 
 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop + MgO_basis[1];
-				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
 				distance = 0;
 				for (int l = 0; l < 3; l++)
 					distance += tmp_vec(l)*tmp_vec(l);
@@ -1332,7 +1357,6 @@ int main()
 				}
 
 				tmp_vec = i1*lat_vec1 + i2*lat_vec2 + i3*MgO_lat_oop - MgO_basis[1];
-				//TODO this needs sorting out.. per quadrant, like the hybrids below. Complicated due to U&T...
 				distance = 0;
 				for (int l = 0; l < 3; l++)
 					distance += tmp_vec(l)*tmp_vec(l);
@@ -1463,6 +1487,16 @@ int main()
 						tmp_mat = eint1(FeAu_d1, x, y, z);
 						iron_gold_dn.emplace_back(tmp_mat);
 					}
+					else if (distance < Au_Fe_close_nnn + 1e-3){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(FeAu_close_u2, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_close_d2, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
 					else if (distance < Au_Fe_nnn + 1e-3){
 						Fe_Au_pos.emplace_back(tmp_vec);
 						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
@@ -1471,6 +1505,16 @@ int main()
 						tmp_mat = eint1(FeAu_u2, x, y, z);
 						iron_gold_up.emplace_back(tmp_mat);
 						tmp_mat = eint1(FeAu_d2, x, y, z);
+						iron_gold_dn.emplace_back(tmp_mat);
+					}
+					else if (distance < Au_Fe_close_nnnn + 1e-3){
+						Fe_Au_pos.emplace_back(tmp_vec);
+						x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+						tmp_mat = eint1(FeAu_close_u3, x, y, z);
+						iron_gold_up.emplace_back(tmp_mat);
+						tmp_mat = eint1(FeAu_close_d3, x, y, z);
 						iron_gold_dn.emplace_back(tmp_mat);
 					}
 					else if (distance < Au_Fe_nnnn + 1e-3){
@@ -1508,6 +1552,16 @@ int main()
 							tmp_mat = eint1(FeAu_d1, x, y, z);
 							iron_gold_dn.emplace_back(tmp_mat);
 						}
+						else if (distance < Au_Fe_close_nnn + 1e-3){
+							Fe_Au_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_close_u2, x, y, z);
+							iron_gold_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_close_d2, x, y, z);
+							iron_gold_dn.emplace_back(tmp_mat);
+						}
 						else if (distance < Au_Fe_nnn + 1e-3){
 							Fe_Au_pos.emplace_back(tmp_vec);
 							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
@@ -1516,6 +1570,16 @@ int main()
 							tmp_mat = eint1(FeAu_u2, x, y, z);
 							iron_gold_up.emplace_back(tmp_mat);
 							tmp_mat = eint1(FeAu_d2, x, y, z);
+							iron_gold_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_close_nnnn + 1e-3){
+							Fe_Au_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_close_u3, x, y, z);
+							iron_gold_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_close_d3, x, y, z);
 							iron_gold_dn.emplace_back(tmp_mat);
 						}
 						else if (distance < Au_Fe_nnnn + 1e-3){
@@ -1552,6 +1616,16 @@ int main()
 							tmp_mat = eint1(FeAu_d1, x, y, z);
 							gold_iron_dn.emplace_back(tmp_mat);
 						}
+						else if (distance < Au_Fe_close_nnn + 1e-3){
+							Au_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_close_u2, x, y, z);
+							gold_iron_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_close_d2, x, y, z);
+							gold_iron_dn.emplace_back(tmp_mat);
+						}
 						else if (distance < Au_Fe_nnn + 1e-3){
 							Au_Fe_pos.emplace_back(tmp_vec);
 							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
@@ -1560,6 +1634,16 @@ int main()
 							tmp_mat = eint1(FeAu_u2, x, y, z);
 							gold_iron_up.emplace_back(tmp_mat);
 							tmp_mat = eint1(FeAu_d2, x, y, z);
+							gold_iron_dn.emplace_back(tmp_mat);
+						}
+						else if (distance < Au_Fe_close_nnnn + 1e-3){
+							Au_Fe_pos.emplace_back(tmp_vec);
+							x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+							tmp_mat = eint1(FeAu_close_u3, x, y, z);
+							gold_iron_up.emplace_back(tmp_mat);
+							tmp_mat = eint1(FeAu_close_d3, x, y, z);
 							gold_iron_dn.emplace_back(tmp_mat);
 						}
 						else if (distance < Au_Fe_nnnn + 1e-3){
@@ -1724,6 +1808,16 @@ int main()
 					tmp_mat = eint1(MgFe_d2, x, y, z);
 					iron_dn_MgO_12.emplace_back(tmp_mat);
 				}
+				else if (distance < MgO_Fe_close_nnnn + 1e-3){
+					MgO_Fe_pos_12.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_close_u3, x, y, z);
+					iron_up_MgO_12.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_close_d3, x, y, z);
+					iron_dn_MgO_12.emplace_back(tmp_mat);
+				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){
 					MgO_Fe_pos_12.emplace_back(tmp_vec);
 					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
@@ -1882,6 +1976,16 @@ int main()
 					tmp_mat = eint1(MgFe_u2, x, y, z);
 					iron_up_MgO_22.emplace_back(tmp_mat);
 					tmp_mat = eint1(MgFe_d2, x, y, z);
+					iron_dn_MgO_22.emplace_back(tmp_mat);
+				}
+				else if (distance < MgO_Fe_close_nnnn + 1e-3){
+					MgO_Fe_pos_22.emplace_back(tmp_vec);
+					x = tmp_vec.dot(X)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					y = tmp_vec.dot(Y)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					z = tmp_vec.dot(Z)/sqrt(tmp_vec(0)*tmp_vec(0) + tmp_vec(1)*tmp_vec(1) + tmp_vec(2)*tmp_vec(2)); 
+					tmp_mat = eint1(MgFe_close_u3, x, y, z);
+					iron_up_MgO_22.emplace_back(tmp_mat);
+					tmp_mat = eint1(MgFe_close_d3, x, y, z);
 					iron_dn_MgO_22.emplace_back(tmp_mat);
 				}
 				else if (distance < MgO_Fe_nnnn + 1e-3){

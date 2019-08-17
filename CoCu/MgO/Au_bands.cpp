@@ -304,7 +304,7 @@ int main(){
 	Mydata += to_string(1+ltm->tm_mon);
 	Mydata += "-";
 	Mydata += to_string(1900+ltm->tm_year);
-	Mydata += "-MgO_DOS.txt";
+	Mydata += "-MgO_DOS_neck.txt";
 
 	ofstream Myfile;	
 
@@ -315,7 +315,8 @@ int main(){
 	/* double fermi = 0.5074;//Fermi level for Au */
 	/* double fermi = 0.57553; */
 	/* double fermi = 0.7466;//Fermi level for Fe */
-	double fermi = 0.;
+	/* double fermi = 0.3191;//Fermi level for MgO */
+	double fermi = 0;
 
 	dcomp i;
 	i = -1.;
@@ -323,6 +324,7 @@ int main(){
 
 	Matrix<dcomp, 9, 9> E;
 	Matrix<dcomp, 9, 9> I = Matrix<dcomp, 9, 9>::Identity();
+	Matrix<dcomp, 18, 18> Ibig = Matrix<dcomp, 18, 18>::Identity();
 	M9 ins_11, ins_12, ins_21, ins_22;
 	Matrix<dcomp, 18, 18> ins, E2;
 
@@ -334,36 +336,36 @@ int main(){
 	for (int k = 0; k < 251; k++)
 	{
 
-		/* //This to create E(k_y) presently at neck */
-		/* k_x = 2.532374; */
-		/* k_z = 2.532374; */
-		/* k_y = 2*M_PI*k/250.; */
+		//This to create E(k_y) presently at neck
+		k_x = 2.532374;
+		k_z = 2.532374;
+		k_y = M_PI*k/250.;
 
-		//This for conventional bandstructure
-		if (k < 101){
-			pi = 2.*M_PI*k/100.;
-			k_x = pi;
-			k_y = 0;
-			k_z = 0;
-		}
-		if ((k > 100) && (k < 151)){
-			pi = M_PI*(k-100)/50.;
-			k_x = 2.*M_PI;
-			k_y = 0;
-			k_z = pi;
-		}	
-		if ((k > 150) && (k < 201)){
-			pi = M_PI*(k-150)/50.;
-			k_x = 2.*M_PI - pi;
-			k_y = pi;
-			k_z = M_PI;
-		}
-		if ((k > 200) && (k < 251)){
-			pi = M_PI*(k-200)/50.;
-			k_x = M_PI-pi;
-			k_y = M_PI-pi;
-			k_z = M_PI-pi;
-		}
+		/* //This for conventional bandstructure */
+		/* if (k < 101){ */
+		/* 	pi = 2.*M_PI*k/100.; */
+		/* 	k_x = pi; */
+		/* 	k_y = 0; */
+		/* 	k_z = 0; */
+		/* } */
+		/* if ((k > 100) && (k < 151)){ */
+		/* 	pi = M_PI*(k-100)/50.; */
+		/* 	k_x = 2.*M_PI; */
+		/* 	k_y = 0; */
+		/* 	k_z = pi; */
+		/* } */	
+		/* if ((k > 150) && (k < 201)){ */
+		/* 	pi = M_PI*(k-150)/50.; */
+		/* 	k_x = 2.*M_PI - pi; */
+		/* 	k_y = pi; */
+		/* 	k_z = M_PI; */
+		/* } */
+		/* if ((k > 200) && (k < 251)){ */
+		/* 	pi = M_PI*(k-200)/50.; */
+		/* 	k_x = M_PI-pi; */
+		/* 	k_y = M_PI-pi; */
+		/* 	k_z = M_PI-pi; */
+		/* } */
 
 		/* K(0) = k_x; */
 		/* K(1) = k_y; */
@@ -383,7 +385,7 @@ int main(){
 		//fully diagonalised Hamiltonian
 		/* E = H(Au_pos, gold, k_x, k_y, k_z) - fermi*I; */
 		/* E = H(Fe_pos, iron_dn, k_x, k_y, k_z) - fermi*I; */
-		E2 = ins; //- fermi*I;
+		E2 = ins - fermi*Ibig;
 		/* E = H(Fe_pos, iron_up, k_x, k_y, k_z) - fermi*I; */
 		/* SelfAdjointEigenSolver<Matrix<dcomp, 9, 9>> es; */
 		SelfAdjointEigenSolver<Matrix<dcomp, 18, 18>> es;
