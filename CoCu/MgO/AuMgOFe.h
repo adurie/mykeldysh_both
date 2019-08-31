@@ -148,7 +148,22 @@ Matrix<complex<double>, 9, 9> eint1(vector<double> vec, double x, double y, doub
       return b;
 }
 
-Matrix<complex<double>, 9, 9> U(int numat, int isp){
+string species(int numat){
+	string atom;
+	if (numat == 1)
+		atom = "Au";
+	else if (numat == 2)
+		atom = "Fe";
+	else if (numat == 3)
+		atom = "Mg";
+	else if (numat == 4)
+		atom = "O";
+	else
+		cout<<"Selection not recognised!"<<endl;
+	return atom;
+}
+
+Matrix<complex<double>, 9, 9> U(int numat, int spin){
 
       double ryd=13.6058;
       double s0, p0, d0t, d0e;
@@ -159,39 +174,37 @@ Matrix<complex<double>, 9, 9> U(int numat, int isp){
       double dee=3.5;         //   classic
       double xmgo_shift=-dee/ryd;
       //TODO Papa Fermi level of Au = 0.5380
-      if (numat == 1){//TODO need to figure out relative Fermi shifts
-       	      //     BULK Fe up:
-	      if (isp == 1){
-      		s0 =  1.13516 - ef;
-	      	p0 =  1.81739 - ef;
-      		d0t = 0.64840 - ef;
-      		d0e = 0.62960 - ef;
-	      }
-	      //     BULK Fe down:
-	      else if (isp == 0){
-      		s0 =  1.14481 - ef;
-      		p0 =  1.80769 - ef;
-      		d0t = 0.78456 - ef;
-      		d0e = 0.75661 - ef;
-	      }
-	      else
-		      cout<<"Warning, selection not recognised in function 'U'"<<endl;
-      }
+      if (numat == 1){
       //Au
-      else if (numat == 2){
 	      s0 = 0.56220 - Au_ef;
 	      p0 = 1.27897 - Au_ef;
 	      d0t = 0.26097 - Au_ef;
 	      d0e = 0.25309 - Au_ef;
       }
-//     Mg :
+      else if (numat == 2){//TODO need to figure out relative Fermi shifts
+      	if (spin == 0){
+      //BULK Fe up:
+      	      s0 =  1.13516 - ef;
+       	      p0 =  1.81739 - ef;
+     	      d0t = 0.64840 - ef;
+      	      d0e = 0.62960 - ef;
+	}
+	else if (spin == 1){
+      //BULK Fe down:
+	      s0 =  1.14481 - ef;
+      	      p0 =  1.80769 - ef;
+      	      d0t = 0.78456 - ef;
+      	      d0e = 0.75661 - ef;
+      	}
+      }
+      //Mg :
       else if (numat == 3){	
 	      s0 = 9.88/ryd + xmgo_shift;
 	      p0 = 100. + xmgo_shift;
 	      d0t = 100. + xmgo_shift;
 	      d0e = 100. + xmgo_shift;
       }
-//     O :
+      //O :
       else if (numat == 4){
 	      s0 = 100. + xmgo_shift;
 	      p0 = -2.03/ryd + xmgo_shift;
@@ -200,24 +213,6 @@ Matrix<complex<double>, 9, 9> U(int numat, int isp){
       }
       else 
 	      cout<<"Warning, selection not recognised in function 'U'"<<endl;
-      /* const double cshift = .575530 - .715751; */
-      /* const double delta = 1.113608939931278e-1; */
-      /* const double vex = delta*0.5; */
-      /* //Co */
-      /* if (numat == 1){ */
-      /*   s0 =  1.12946 + cshift; // on-site */
-      /*   p0 =  1.75262 + cshift; */
-      /*   d0t =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex; */
-      /*   d0e =  0.5*(0.60547 + 0.60445) + cshift - (2*isp-1)*vex; */
-      /* } */
-
-      /* if (numat == 2){ */
-	/* //Cu */
-      /*   s0 =  0.79466; */
-      /*   p0 =  1.35351; */
-      /*   d0t =  0.5*(0.37307 + 0.37180); */
-      /*   d0e =  0.5*(0.37307 + 0.37180); */
-      /* } */
       Matrix<complex<double>, 9, 9> result;
       result = Matrix<complex<double>, 9, 9>::Zero();
       result(0,0) = s0;
@@ -233,7 +228,7 @@ Matrix<complex<double>, 9, 9> U(int numat, int isp){
 }
 
 
-vector<double> param(int numat, int numnn){
+vector<double> param(int numat, int numnn, int spin){
 //     THIS ROUTINE IS ATOM DEPENDENT :-
 //     -----------------------------------------------------------------
 //     The first index in the tight binding parameter arrays refers to
@@ -282,106 +277,107 @@ vector<double> param(int numat, int numnn){
 
 //     -----------------------------------------------------------------
 	if (numat == 2){
+		if (spin == 0){
 //     Fe UP:
 
 //     first n.n.
 
-		if (numnn == 1){
-		      sss = -0.12950;
-		      pps =  0.25741;
-		      ppp =  0.02422;
-		      dds = -0.04541;
-		      ddp =  0.02714;
-		      ddd = -0.00260;
-		      sps =  0.17363;
-		      sds = -0.06115;
-		      pds = -0.08485;
-		      pdp =  0.01778;
+        		if (numnn == 1){
+        		      sss = -0.12950;
+        		      pps =  0.25741;
+        		      ppp =  0.02422;
+        		      dds = -0.04541;
+        		      ddp =  0.02714;
+        		      ddd = -0.00260;
+        		      sps =  0.17363;
+        		      sds = -0.06115;
+        		      pds = -0.08485;
+        		      pdp =  0.01778;
+        		}
+        
+        //     second n.n.
+        
+        		if (numnn == 2){
+        		      sss = -0.02915;
+        		      pps =  0.16827;
+        		      ppp =  0.04112;
+        		      dds = -0.02713;
+        		      ddp =  0.00589;
+        		      ddd =  0.00060;
+        		      sps =  0.06571;
+        		      sds = -0.03560;
+        		      pds = -0.05473;
+        		      pdp = -0.00280;
+        		}
+        
+        //     third n.n.
+        
+        		if (numnn == 3){
+        		      sss =  0.01595;
+        		      pps = -0.04985;
+        		      ppp =  0.01796;
+        		      dds =  0.00112;
+        		      ddp =  0.00034;
+        		      ddd = -0.00056;
+        		      sps = -0.02477;
+        		      sds = -0.00073;
+        		      pds = -0.00082;
+        		      pdp = -0.00241;
+        		}
 		}
-
-//     second n.n.
-
-		if (numnn == 2){
-		      sss = -0.02915;
-		      pps =  0.16827;
-		      ppp =  0.04112;
-		      dds = -0.02713;
-		      ddp =  0.00589;
-		      ddd =  0.00060;
-		      sps =  0.06571;
-		      sds = -0.03560;
-		      pds = -0.05473;
-		      pdp = -0.00280;
-		}
-
-//     third n.n.
-
-		if (numnn == 3){
-		      sss =  0.01595;
-		      pps = -0.04985;
-		      ppp =  0.01796;
-		      dds =  0.00112;
-		      ddp =  0.00034;
-		      ddd = -0.00056;
-		      sps = -0.02477;
-		      sds = -0.00073;
-		      pds = -0.00082;
-		      pdp = -0.00241;
-		}
+		if (spin == 1){
+        //     Fe DOWN:
+        
+        //     first n.n.
+        
+        		if (numnn == 1){
+        		      sss = -0.13243;
+        		      pps =  0.25911;
+        		      ppp =  0.02653;
+        		      dds = -0.05266;
+        		      ddp =  0.03276;
+        		      ddd = -0.00286;
+        		      sps =  0.17278;
+        		      sds = -0.07145;
+        		      pds = -0.09702;
+        		      pdp =  0.02129;
+        		}
+        
+        //     second n.n.
+        
+        		if (numnn == 2){
+        		      sss = -0.03003;
+        		      pps =  0.18256;
+        		      ppp =  0.03703;
+        		      dds = -0.03396;
+        		      ddp =  0.00581;
+        		      ddd =  0.00114;
+        		      sps =  0.07159;
+        		      sds = -0.04075;
+        		      pds = -0.06522;
+        		      pdp = -0.00467;
+        		}
+        
+        //     third n.n.
+        
+        		if (numnn == 3){
+        		      sss =  0.01589;
+        		      pps = -0.04253;
+        		      ppp =  0.01538;
+        		      dds =  0.00233;
+        		      ddp =  0.00013;
+        		      ddd = -0.00060;
+        		      sps = -0.02306;
+        		      sds =  0.00016;
+        		      pds =  0.00222;
+        		      pdp = -0.00351;
+        		}
+        	}
 	}
+
 
 //     -----------------------------------------------------------------
 	if (numat == 3){
-//     Fe DOWN:
-
-//     first n.n.
-
-		if (numnn == 1){
-		      sss = -0.13243;
-		      pps =  0.25911;
-		      ppp =  0.02653;
-		      dds = -0.05266;
-		      ddp =  0.03276;
-		      ddd = -0.00286;
-		      sps =  0.17278;
-		      sds = -0.07145;
-		      pds = -0.09702;
-		      pdp =  0.02129;
-		}
-
-//     second n.n.
-
-		if (numnn == 2){
-		      sss = -0.03003;
-		      pps =  0.18256;
-		      ppp =  0.03703;
-		      dds = -0.03396;
-		      ddp =  0.00581;
-		      ddd =  0.00114;
-		      sps =  0.07159;
-		      sds = -0.04075;
-		      pds = -0.06522;
-		      pdp = -0.00467;
-		}
-
-//     third n.n.
-
-		if (numnn == 3){
-		      sss =  0.01589;
-		      pps = -0.04253;
-		      ppp =  0.01538;
-		      dds =  0.00233;
-		      ddp =  0.00013;
-		      ddd = -0.00060;
-		      sps = -0.02306;
-		      sds =  0.00016;
-		      pds =  0.00222;
-		      pdp = -0.00351;
-		}
-	}
-
-//     -----------------------------------------------------------------
-	if (numat == 4){
 //     Mg:
 
 //     first n.n.
@@ -431,7 +427,7 @@ vector<double> param(int numat, int numnn){
 	}
 
 //     -----------------------------------------------------------------
-	if (numat == 5){
+	if (numat == 4){
 //     O:
 
 //     first n.n.

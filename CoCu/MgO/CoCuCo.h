@@ -2,8 +2,8 @@
 #define COCUCO_H
 
 #include <cmath>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/StdVector>
+#include <Eigen/Dense>
+#include <Eigen/StdVector>
 
 using namespace std;
 using namespace Eigen;
@@ -155,10 +155,10 @@ Matrix<complex<double>, 9, 9> U(int numat, int isp){
 
       if (numat == 2){
 	//Cu
-        s0 =  0.79466;
-        p0 =  1.35351;
-        d0t =  0.5*(0.37307 + 0.37180);
-        d0e =  0.5*(0.37307 + 0.37180);
+        s0 =  0.79466 - 0.57553; 
+        p0 =  1.35351 - 0.57553;
+        d0t =  0.5*(0.37307 + 0.37180) - 0.57553;
+        d0e =  0.5*(0.37307 + 0.37180) - 0.57553;
       }
       Matrix<complex<double>, 9, 9> result;
       result = Matrix<complex<double>, 9, 9>::Zero();

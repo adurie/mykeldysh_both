@@ -4,6 +4,18 @@
 #include <Eigen/Dense>
 #include <ctime>
 #include "AuMgOFe.h"
+#include <nag.h>
+#include <nagc05.h>
+#include <nag_stdlib.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+  static double NAG_CALL f(double x, Nag_Comm *comm);
+#ifdef __cplusplus
+}
+#endif
 
 using namespace std;
 using namespace Eigen;
@@ -12,6 +24,15 @@ typedef Matrix<complex<double>, 9, 9> M9;
 typedef vector<Vector3d, aligned_allocator<Vector3d>> vec3;
 typedef vector<Matrix<dcomp, 9, 9>, aligned_allocator<Matrix<dcomp, 9, 9>>> vM;
 //calculates the bandstructure of fcc Cu
+
+typedef struct
+	{
+		double *k_y;
+		double *k_z;
+		vec3 *Au_pos;
+	        vM *gold;
+	}
+variables;
 
 M9 H(const vec3 &pos, const vM &U, const double x, const double y, const double z){
 	Vector3d K;
@@ -41,6 +62,53 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 		result = result + U[k]*exp(i*tmp_vec.dot(K));
 	}
 	return result;
+}
+
+static double NAG_CALL f(double k_x, Nag_Comm *comm)
+{
+	variables * send = (variables *) comm->p;
+	Matrix<dcomp, 9, 9> E;
+	E = H(*send->Au_pos, *send->gold, k_x, *send->k_y, *send->k_z);// - fermi*I;
+	SelfAdjointEigenSolver<Matrix<dcomp, 9, 9>> es;
+	es.compute(E, EigenvaluesOnly);
+	Matrix<double, 9, 1> O;
+	O = es.eigenvalues();
+	return O(5);
+}
+
+int pass(variables * send, double &k_x){
+	double a, b;
+	double eta, eps;
+	Integer exit_status = 0;
+	NagError fail;
+	Nag_Comm comm;
+	comm.p = send;
+	k_x = 0;
+
+	INIT_FAIL(fail);
+
+		/* For communication with user-supplied functions: */
+
+	/* a = 2.5; */
+	/* b = 3.; */
+	double h = 0.03;
+	eps = 1e-07;
+	eta = 0.0;
+	c05auc(&k_x, h, eps, eta, f, &a, &b, &comm, &fail);
+	/* c05ayc(a, b, eps, eta, f, &k_x, &comm, &fail); */
+	int test;
+	if (fail.code != NE_NOERROR) {
+		printf("%s\n", fail.message);
+		test = 1;
+	}
+	else 
+		test = 0;
+	/* 	if (fail.code == NE_TOO_SMALL || fail.code == NE_PROBABLE_POLE) */
+	/* 		printf("Final point = %12.5f\n", k_x); */
+	/* 	exit_status = 1; */
+	/* } */
+
+	return test;
 }
 
 int main(){
@@ -304,7 +372,7 @@ int main(){
 	Mydata += to_string(1+ltm->tm_mon);
 	Mydata += "-";
 	Mydata += to_string(1900+ltm->tm_year);
-	Mydata += "-Au_bands.txt";
+	Mydata += "-Au_fermi.txt";
 
 	ofstream Myfile;	
 
@@ -316,7 +384,7 @@ int main(){
 	/* double fermi = 0.57553; */
 	/* double fermi = 0.7466;//Fermi level for Fe */
 	/* double fermi = 0.3191;//Fermi level for MgO */
-	double fermi = 0;
+	double fermi = 0;//note revisions to AuMgOFe.h
 
 	dcomp i;
 	i = -1.;
@@ -328,182 +396,75 @@ int main(){
 	M9 ins_11, ins_12, ins_21, ins_22;
 	Matrix<dcomp, 18, 18> ins, E2;
 
-	int nt = 251;
-	VectorXd vec1(nt), vec2(nt), vec3(nt), vec4(nt), vec5(nt), vec6(nt), vec7(nt), vec8(nt), vec9(nt),
-		 vec10(nt), vec11(nt), vec12(nt), vec13(nt), vec14(nt), vec15(nt), vec16(nt), vec17(nt), vec18(nt);
-	double k_x, k_y, k_z, pi;
-	Vector3d K;
-	for (int k = 0; k < 251; k++)
-	{
+	double k_x, k_y, k_z;
+	variables send;
+	send.gold = &gold;
+	send.Au_pos = &Au_pos;
 
-		/* //This to create E(k_y) presently at neck */
-		/* k_x = 2.532374; */
-		/* k_z = 2.532374; */
-		/* k_y = M_PI*k/250.; */
-
-		//This for conventional bandstructure
-		if (k < 101){
-			pi = 2.*M_PI*k/100.;
-			k_x = pi;
-			k_y = 0;
-			k_z = 0;
+	int size = 1000;
+	int test;
+	for (int k = 0; k < size+1; k++){
+		for (int l = 0; l < size+1; l++){
+			k_z = 4.*M_PI*k/(1.*size) - 2.*M_PI;
+			k_y = 4.*M_PI*l/(1.*size) - 2.*M_PI;
+			send.k_y = &k_y;
+			send.k_z = &k_z;
+			test = pass(&send, k_x);
+			if (test == 0)
+				Myfile<<k_x<<" "<<k_y<<" "<<k_z<<endl;
 		}
-		if ((k > 100) && (k < 151)){
-			pi = M_PI*(k-100)/50.;
-			k_x = 2.*M_PI;
-			k_y = 0;
-			k_z = pi;
-		}	
-		if ((k > 150) && (k < 201)){
-			pi = M_PI*(k-150)/50.;
-			k_x = 2.*M_PI - pi;
-			k_y = pi;
-			k_z = M_PI;
-		}
-		if ((k > 200) && (k < 251)){
-			pi = M_PI*(k-200)/50.;
-			k_x = M_PI-pi;
-			k_y = M_PI-pi;
-			k_z = M_PI-pi;
-		}
-
-		/* K(0) = k_x; */
-		/* K(1) = k_y; */
-		/* K(2) = k_z; */
-
-		/* //generate in plane Hamiltonians for simple bilayers */
-		/* ins_11 = InPlaneH(MgO_pos_11,  MgO_basis[0], magnesium_11, k_x, k_y, k_z);//TODO only 2nd NN and onsite depend on atom type, catered for in 11 and 22 only */
-		/* ins_12 = InPlaneH(MgO_pos_12,  MgO_basis[1], oxide_12, k_x, k_y, k_z);//in theory this should contain */
-		/* ins_21 = InPlaneH(MgO_pos_21, -MgO_basis[1], oxide_21, k_x, k_y, k_z);//the same hoppings as magnesium */
-		/* ins_22 = InPlaneH(MgO_pos_11,  MgO_basis[0], oxide_11, k_x, k_y, k_z); */
-
-		/* ins.topLeftCorner(9,9) = ins_11; */
-		/* ins.topRightCorner(9,9) = ins_12; */
-		/* ins.bottomLeftCorner(9,9) = ins_21; */
-		/* ins.bottomRightCorner(9,9) = ins_22; */
-
-		//fully diagonalised Hamiltonian
-		E = H(Au_pos, gold, k_x, k_y, k_z);// - fermi*I;
-		/* E = H(Fe_pos, iron_dn, k_x, k_y, k_z) - fermi*I; */
-		/* E2 = ins - fermi*Ibig; */
-		/* E = H(Fe_pos, iron_up, k_x, k_y, k_z) - fermi*I; */
-		SelfAdjointEigenSolver<Matrix<dcomp, 9, 9>> es;
-		/* SelfAdjointEigenSolver<Matrix<dcomp, 18, 18>> es; */
-		es.compute(E);
-		/* es.compute(E2); */
-		Matrix<double, 9, 1> O;
-		/* Matrix<double, 18, 1> O; */
-		O = es.eigenvalues();
-
-		/* //Hamiltonian firstly diagonalised in-plane */
-		/* u_11 = u + t_3*exp(i*d_3.dot(K))+ t_4*exp(i*d_4.dot(K))+ t_9*exp(i*d_9.dot(K)) + t_10*exp(i*d_10.dot(K)) + */ 
-		/* 	t_13*exp(i*d_13.dot(K))+ t_14*exp(i*d_14.dot(K))+ t_17*exp(i*d_17.dot(K)) + t_18*exp(i*d_18.dot(K)); */
-		/* u_12 = t_1 + t_5*exp(i*d_9.dot(K)) + t_7*exp(i*d_14.dot(K)) + t_12*exp(i*d_4.dot(K)); */
-		/* U << u_11, u_12, u_12.adjoint(), u_11; */
-		/* T << t_15, zero, u_12.adjoint(), t_16; */
-		/* E = U + T*exp(i*d_15.dot(K)) + T.adjoint()*exp(i*d_16.dot(K)); */
-		/* SelfAdjointEigenSolver<Matrix<dcomp, 18, 18>> es; */
-		/* es.compute(E); */
-		/* Matrix<double, 18, 1> O; */
-		/* O = es.eigenvalues(); */
-
-		/* Myfile<<"A"<<" "<<k<<" "<<O(0)<<endl; */
-		/* Myfile<<"B"<<" "<<k<<" "<<O(1)<<endl; */
-		/* Myfile<<"C"<<" "<<k<<" "<<O(2)<<endl; */
-		/* Myfile<<"D"<<" "<<k<<" "<<O(3)<<endl; */
-		/* Myfile<<"E"<<" "<<k<<" "<<O(4)<<endl; */
-		/* Myfile<<"F"<<" "<<k<<" "<<O(5)<<endl; */
-		/* Myfile<<"G"<<" "<<k<<" "<<O(6)<<endl; */
-		/* Myfile<<"H"<<" "<<k<<" "<<O(7)<<endl; */
-		/* Myfile<<"I"<<" "<<k<<" "<<O(8)<<endl; */
-
-		vec1(k) = O(0);
-		vec2(k) = O(1);
-		vec3(k) = O(2);
-		vec4(k) = O(3);
-		vec5(k) = O(4);
-		vec6(k) = O(5);
-		vec7(k) = O(6);
-		vec8(k) = O(7);
-		vec9(k) = O(8);
-
-		/* vec10(k) = O(9); */
-		/* vec11(k) = O(10); */
-		/* vec12(k) = O(11); */
-		/* vec13(k) = O(12); */
-		/* vec14(k) = O(13); */
-		/* vec15(k) = O(14); */
-		/* vec16(k) = O(15); */
-		/* vec17(k) = O(16); */
-		/* vec18(k) = O(17); */
-
-		/* Myfile<<"J"<<" "<<k<<" "<<O(9)<<endl; */
-		/* Myfile<<"K"<<" "<<k<<" "<<O(10)<<endl; */
-		/* Myfile<<"L"<<" "<<k<<" "<<O(11)<<endl; */
-		/* Myfile<<"M"<<" "<<k<<" "<<O(12)<<endl; */
-		/* Myfile<<"N"<<" "<<k<<" "<<O(13)<<endl; */
-		/* Myfile<<"O"<<" "<<k<<" "<<O(14)<<endl; */
-		/* Myfile<<"P"<<" "<<k<<" "<<O(15)<<endl; */
-		/* Myfile<<"Q"<<" "<<k<<" "<<O(16)<<endl; */
-		/* Myfile<<"R"<<" "<<k<<" "<<O(17)<<endl; */
-
 	}
-
-	for (int k = 0; k < vec1.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec1(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec2.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec2(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec3.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec3(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec4.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec4(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec5.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec5(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec6.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec6(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec7.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec7(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec8.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec8(k)<<endl;
-	Myfile<<endl;
-	for (int k = 0; k < vec9.size(); k++)
-		Myfile<<k/250.<<" "<<ryd*vec9(k)<<endl;
-
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec10.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec10(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec11.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec11(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec12.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec12(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec13.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec13(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec14.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec14(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec15.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec15(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec16.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec16(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec17.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec17(k)<<endl; */
-	/* Myfile<<endl; */
-	/* for (int k = 0; k < vec18.size(); k++) */
-	/* 	Myfile<<k/250.<<" "<<ryd*vec18(k)<<endl; */
 
 	Myfile.close();
 	return 0;
 }
+
+	/* int size = 4000; */
+	/* int j = 0; */
+	/* for (int k = 0; k < size; k++){ */
+	/* 	/1* for (int j = 0; j < size; j++){ *1/ */
+	/* 		for (int m = 0; m < size; m++){ */
+
+	/* 			//This to create E(k_y) presently at neck */
+	/* 			k_x = M_PI*k/(1.*size); */
+	/* 			k_y = M_PI*m/(1.*size); */
+	/* 			k_z = -M_PI;//*j/(1.*size); */
+
+	/* 			//fully diagonalised Hamiltonian */
+	/* 			E = H(Au_pos, gold, k_x, k_y, k_z);// - fermi*I; */
+	/* 			/1* E = H(Fe_pos, iron_dn, k_x, k_y, k_z) - fermi*I; *1/ */
+	/* 			/1* E2 = ins - fermi*Ibig; *1/ */
+	/* 			/1* E = H(Fe_pos, iron_up, k_x, k_y, k_z) - fermi*I; *1/ */
+	/* 			SelfAdjointEigenSolver<Matrix<dcomp, 9, 9>> es; */
+	/* 			/1* SelfAdjointEigenSolver<Matrix<dcomp, 18, 18>> es; *1/ */
+	/* 			es.compute(E, EigenvaluesOnly); */
+	/* 			/1* es.compute(E2); *1/ */
+	/* 			Matrix<double, 9, 1> O; */
+	/* 			/1* Matrix<double, 18, 1> O; *1/ */
+	/* 			O = es.eigenvalues(); */
+	/* 			for (int l = 0; l < O.size(); l++){ */
+	/* 				if (abs(O(l)) < 1e-2){ */
+
+	/* 					Myfile<<k_x<<" "<<k_y<<endl; */
+	/* 					Myfile<<-k_x<<" "<<k_y<<endl; */
+	/* 					Myfile<<k_x<<" "<<-k_y<<endl; */
+	/* 					Myfile<<-k_x<<" "<<-k_y<<endl; */
+
+	/* 					/1* Myfile<<k_x<<" "<<k_y<<" "<<k_z<<endl; *1/ */
+	/* 					/1* Myfile<<-k_x<<" "<<k_y<<" "<<k_z<<endl; *1/ */
+	/* 					/1* Myfile<<k_x<<" "<<-k_y<<" "<<k_z<<endl; *1/ */
+	/* 					/1* Myfile<<k_x<<" "<<k_y<<" "<<-k_z<<endl; *1/ */
+	/* 					/1* Myfile<<-k_x<<" "<<-k_y<<" "<<k_z<<endl; *1/ */
+	/* 					/1* Myfile<<k_x<<" "<<-k_y<<" "<<-k_z<<endl; *1/ */
+	/* 					/1* Myfile<<-k_x<<" "<<k_y<<" "<<-k_z<<endl; *1/ */
+	/* 					/1* Myfile<<-k_x<<" "<<-k_y<<" "<<-k_z<<endl; *1/ */
+
+	/* 				} */
+	/* 			} */
+	/* 		/1* } *1/ */
+	/* 	} */
+	/* } */
+
+	/* Myfile.close(); */
+	/* return 0; */
+/* } */
