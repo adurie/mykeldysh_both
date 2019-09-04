@@ -45,13 +45,68 @@ int main(){
 	umap["hi there"][1][0].emplace_back(mat3);
 	umap["hi there"][1][1].emplace_back(mat4);
 
-	for (int i = 0; i < 2; i++){
-		for (int j = 0; j < 2; j++){
-			for (int k = 0; k < umap["hi there"][i][j].size(); k++){
-				cout<<umap["hi there"][i][j][k]<<endl<<endl;
-			}
+	vector<vector<Vector3d>> basis;
+	vector<Vector3d> test_vec;
+	test_vec.reserve(2);
+	basis.reserve(5);
+	Vector3d tmp_vec;
+	tmp_vec << 0, 0, 0;
+	for (int k = 0; k < 2; k++)
+		test_vec.emplace_back(tmp_vec);
+	for (int k = 0; k < 5; k++)
+		basis.emplace_back(test_vec);
+	basis[0][0] << 1, 3, 4;
+	basis[1][1] << 3, 2, 5;
+	basis[2][0] << 3, 2, 1;
+
+	/* for (int i = 0; i < basis.size(); i++){ */
+	/* 	for (int k = 0; k < test_vec.size(); k++) */
+	/* 		cout<<basis[i][k].transpose()<<endl; */
+	/* } */
+	unordered_map<string, Vector3d> mappy;
+
+	mappy["Cu"]<<0,0,1;
+	mappy["Co"]<<0.5, 0.5, 0;
+	mappy[species(1)]<<0.5, 0.5, 0;
+	/* for (auto const& k : mappy) */
+	/* 	cout<<k.first<<" "<<k.second.transpose()<<endl; */
+	/* cout<<"Evalyn is a very smelly grotbag!!!"<<endl; */
+
+	/* for (int i = 0; i < 2; i++){ */
+	/* 	for (int j = 0; j < 2; j++){ */
+	/* 		for (int k = 0; k < umap["hi there"][i][j].size(); k++){ */
+	/* 			cout<<umap["hi there"][i][j][k]<<endl<<endl; */
+	/* 		} */
+	/* 	} */
+	/* } */
+
+	unordered_map<string, M9> onsite_up, onsite_dn;
+	unordered_map<string, vector<vector<double>>> hop_up, hop_dn;
+	int numats = numatoms();
+	vector<double> temporary_vector;
+	int numnns = numnn();
+	for (int jj = 1; jj < numats + 1; jj++){
+		onsite_up[species(jj)] = U(jj, 0);
+		onsite_dn[species(jj)] = U(jj, 1);
+		for (int kk = 1; kk < numnns + 1; kk++){
+			temporary_vector = param(jj, kk, 0);
+			hop_up[species(jj)].emplace_back(temporary_vector);
+			temporary_vector = param(jj, kk, 1);
+			hop_dn[species(jj)].emplace_back(temporary_vector);
 		}
 	}
+	for (auto const& k : hop_dn){
+		for (int j = 0; j < numnns; j++){
+			cout<<k.first<<" "<<j<<endl;
+			for (int l = 0; l < 10; l++)
+				cout<<k.second[j][l]<<endl;
+			cout<<endl;
+		}
+	}
+	/* for (auto const& k : onsite_dn) */
+	/* 	cout<<k.first<<endl<<k.second<<endl<<endl; */
+	/* for (auto const& k : onsite_up) */
+	/* 	cout<<k.first<<endl<<k.second<<endl<<endl; */
 
 	return 0;
 }

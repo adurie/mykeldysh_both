@@ -8,6 +8,14 @@
 using namespace std;
 using namespace Eigen;
 
+int numnn(){
+	return 3;
+}
+
+int numatoms(){
+	return 4;
+}
+
 double gmean(double x, double y){
 	double gmean;
 	if (x == y)
@@ -272,6 +280,20 @@ vector<double> param(int numat, int numnn, int spin){
 			sds = -0.00784;
 			pds = -0.00762;
 			pdp =  0.00470;
+		}
+
+//     third n.n. (there are none)
+		if (numnn == 3){
+			sss =  0.;
+			pps =  0.;
+			ppp =  0.;
+			dds =  0.;
+			ddp =  0.;
+			ddd =  0.;
+			sps =  0.;
+			sds =  0.;
+			pds =  0.;
+			pdp =  0.;
 		}
 	}
 
