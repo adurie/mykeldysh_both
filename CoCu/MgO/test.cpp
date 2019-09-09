@@ -80,29 +80,45 @@ int main(){
 	/* 	} */
 	/* } */
 
-	unordered_map<string, M9> onsite_up, onsite_dn;
-	unordered_map<string, vector<vector<double>>> hop_up, hop_dn;
-	int numats = numatoms();
-	vector<double> temporary_vector;
-	int numnns = numnn();
-	for (int jj = 1; jj < numats + 1; jj++){
-		onsite_up[species(jj)] = U(jj, 0);
-		onsite_dn[species(jj)] = U(jj, 1);
-		for (int kk = 1; kk < numnns + 1; kk++){
-			temporary_vector = param(jj, kk, 0);
-			hop_up[species(jj)].emplace_back(temporary_vector);
-			temporary_vector = param(jj, kk, 1);
-			hop_dn[species(jj)].emplace_back(temporary_vector);
-		}
-	}
-	for (auto const& k : hop_dn){
-		for (int j = 0; j < numnns; j++){
-			cout<<k.first<<" "<<j<<endl;
-			for (int l = 0; l < 10; l++)
-				cout<<k.second[j][l]<<endl;
-			cout<<endl;
-		}
-	}
+	Matrix<double, 8, 8> blockmat;
+	Matrix4d block1;
+	Matrix4d block2;
+	block1 = Matrix4d::Zero();
+	block2 = Matrix4d::Ones();
+	//topLeft
+	blockmat.block<4,4>(0,0) = block1;
+	//bottomLeft
+	blockmat.block<4,4>(4,0) = block1;
+	//topRight
+	blockmat.block<4,4>(0,4) = block2;
+	//bottomRight
+	blockmat.block<4,4>(4,4) = block2;
+	cout<<blockmat<<endl;
+	
+	/* unordered_map<string, M9> onsite_up, onsite_dn; */
+	/* unordered_map<string, vector<vector<double>>> hop_up, hop_dn; */
+	/* int numats = numatoms(); */
+	/* vector<double> temporary_vector; */
+	/* int numnns = numnn(); */
+	/* for (int jj = 1; jj < numats + 1; jj++){ */
+	/* 	onsite_up[species(jj)] = U(jj, 0); */
+	/* 	onsite_dn[species(jj)] = U(jj, 1); */
+	/* 	for (int kk = 1; kk < numnns + 1; kk++){ */
+	/* 		temporary_vector = param(jj, kk, 0); */
+	/* 		hop_up[species(jj)].emplace_back(temporary_vector); */
+	/* 		temporary_vector = param(jj, kk, 1); */
+	/* 		hop_dn[species(jj)].emplace_back(temporary_vector); */
+	/* 	} */
+	/* } */
+	/* for (auto const& k : hop_dn){ */
+	/* 	for (int j = 0; j < numnns; j++){ */
+	/* 		cout<<k.first<<" "<<j<<endl; */
+	/* 		for (int l = 0; l < 10; l++) */
+	/* 			cout<<k.second[j][l]<<endl; */
+	/* 		cout<<endl; */
+	/* 	} */
+	/* } */
+
 	/* for (auto const& k : onsite_dn) */
 	/* 	cout<<k.first<<endl<<k.second<<endl<<endl; */
 	/* for (auto const& k : onsite_up) */

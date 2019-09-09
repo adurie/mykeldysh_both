@@ -12,7 +12,7 @@
 #include <nagd01.h>
 #include <nag_stdlib.h>
 #include <vector>
-#include "AuMgOFe.h"
+#include "AuMgOFe_old.h"
 #include <ctime>
 #include "/home/alex/INTEL/impi/2019.1.144/intel64/include/mpi.h"
 #include <iomanip>
@@ -221,10 +221,10 @@ vector<double> f_vec(const double theta, const dcomp E, variables * send, const 
 	Pauli.fill(0.);
 	Pauli.topRightCorner(18,18) = -i*I;
 	Pauli.bottomLeftCorner(18,18) = i*I;
-	/* Pauli.topRightCorner(18,18) = I; */
-	/* Pauli.bottomLeftCorner(18,18) = I; */
+	// Pauli.topRightCorner(18,18) = I; 
+	// Pauli.bottomLeftCorner(18,18) = I; 
 
-	/* dddmat Pauli = Ibig; */
+	// dddmat Pauli = Ibig; 
 
 	double spincurrent_even, spincurrent_odd;
 	dddmat A_even, A_odd, B_even, B_odd, TOT_even, TOT_odd;
@@ -411,7 +411,7 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	ddmat ins_FM_up_T = *send->ins_FM_up_T;
 	ddmat ins_FM_dn_T = *send->ins_FM_dn_T;
 	ddmat ins_NM_T = *send->ins_NM_T;
-	/* cout<<NM<<endl<<endl; */
+	// cout<<NM<<endl<<endl; 
 	double V = send->V;
 
 	ddmat I = ddmat::Identity();
@@ -427,9 +427,9 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
 	ddmat NM_T_dagg = NM_T.adjoint();
 	
-	/* //this for trilayer */
-	/* ddmat GL_up = gs(OMup, FM_T); */
-	/* ddmat GL_dn = gs(OMdn, FM_T); */
+	 //this for trilayer 
+	// ddmat GL_up = gs(OMup, FM_T); 
+	// ddmat GL_dn = gs(OMdn, FM_T); 
 
 	//this below block for 5 layer
 	ddmat GL_up_even = gs(OM - NM, NM_T);
@@ -488,7 +488,7 @@ vector<double> int_theta(const dcomp E, variables * send) {
 	double theta;
 
 	const int n = 10;
-	/* const int n = 1; */
+	// const int n = 1; 
 	for (int k=0; k<n+1; k++) {
 		theta = k*M_PI/n;
 		integrate = f_vec(theta, E, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
@@ -525,7 +525,7 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	ddmat ins_FM_up_T = *send->ins_FM_up_T;
 	ddmat ins_FM_dn_T = *send->ins_FM_dn_T;
 	ddmat ins_NM_T = *send->ins_NM_T;
-	/* cout<<NM<<endl<<endl; */
+	// cout<<NM<<endl<<endl; 
 	double V = send->V;
 
 	ddmat I = ddmat::Identity();
@@ -541,9 +541,9 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 	ddmat FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint();
 	ddmat NM_T_dagg = NM_T.adjoint();
 	
-	/* //this for trilayer */
-	/* ddmat GL_up = gs(OMup, FM_T); */
-	/* ddmat GL_dn = gs(OMdn, FM_T); */
+	// //this for trilayer 
+	// ddmat GL_up = gs(OMup, FM_T); 
+	// ddmat GL_dn = gs(OMdn, FM_T); 
 
 	//this below block for 5 layer
 	ddmat GL_up_even = gs(OM - NM, NM_T);
@@ -598,7 +598,7 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 			fm[ll + k] = 0.;
 	}
 	const int n = 10;
-	/* const int n = 1; */
+	// const int n = 1; 
 	for (int kk=0; kk<n+1; kk++) {
 		theta = kk*M_PI/n;
 		f(result, theta, E, k, needi, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn);
@@ -615,7 +615,7 @@ void int_theta_E(const dcomp E, int k, double * fm, Integer * needi, variables *
 			}
 		}
 	}	
-	/* NAG_FREE(result); */
+	// NAG_FREE(result); 
 }
 
 void pass(const double E[], Integer nx, Integer ldfm, double * fm, Integer * needi, variables * send) {
@@ -624,7 +624,7 @@ void pass(const double E[], Integer nx, Integer ldfm, double * fm, Integer * nee
 	im = sqrt(im);
 	int ksd;
 	for (int k = 0; k < nx; k++){
-		/* cout<<setprecision(8)<<E[k]<<endl; */
+		// cout<<setprecision(8)<<E[k]<<endl; 
 		E_send = E[k] + 1e-6*im;//TODO Andrey has 1e-8 here
 		ksd = k*ldfm;
 		int_theta_E(E_send, ksd, fm, needi, send);
@@ -635,17 +635,17 @@ vector<double> int_energy(variables * send) {
 	Integer irevcm, lcmax, lcmin, lcom, ldfm, ldfmrq,
        		lenx, lenxrq, licmax, licmin, licom, liopts, lopts, ni, nx,
        		sdfm, sdfmrq, sid;
-	  /* Arrays */
+	  // Arrays 
 	char cvalue[17];
 	double *com = 0, *dinest = 0, *errest = 0, *fm = 0, *opts = 0, *x = 0;
 	Integer *icom = 0, *iopts = 0, *needi = 0;
 
-	  /* NAG types */
+	  // NAG types 
 	Nag_VariableType optype;
 	NagError fail;
 
-	  /* Setup phase. */
-	  /* Set problem parameters. */
+	  // Setup phase. 
+	  // Set problem parameters. 
 	ni = send->N;
 	double Ef = send->Ef;
 	double left = Ef;
@@ -662,25 +662,25 @@ vector<double> int_energy(variables * send) {
 	}
 
 	INIT_FAIL(fail);
-	/* Initialize option arrays using nag_quad_opt_set (d01zkc). */
+	// Initialize option arrays using nag_quad_opt_set (d01zkc). 
 	nag_quad_opt_set("Initialize = nag_quad_1d_gen_vec_multi_rcomm", iopts, liopts, opts, lopts, &fail);
 	if (fail.code != NE_NOERROR) {
 		cout<<"Error from nag_quad_opt_set (d01zkc)."<<endl<<fail.message<<endl;
 		exit(EXIT_FAILURE);
 	}
 	nag_quad_opt_set("Quadrature Rule = gk15", iopts, liopts, opts, lopts, &fail);
-	/* nag_quad_opt_set("Quadrature Rule = gk21", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk31", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); */
-	/* nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); */
+	// nag_quad_opt_set("Quadrature Rule = gk21", iopts, liopts, opts, lopts, &fail); 
+	// nag_quad_opt_set("Quadrature Rule = gk31", iopts, liopts, opts, lopts, &fail); 
+	// nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); 
+	// nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); 
+	// nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); 
 	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
 	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
 
-	/* Determine required array dimensions for
-	 * nag_quad_1d_gen_vec_multi_rcomm (d01rac) using
-	 * nag_quad_1d_gen_vec_multi_dimreq (d01rcc).
-	 */
+	// Determine required array dimensions for
+	 // nag_quad_1d_gen_vec_multi_rcomm (d01rac) using
+	 // nag_quad_1d_gen_vec_multi_dimreq (d01rcc).
+	 // 
 	nag_quad_1d_gen_vec_multi_dimreq(ni, &lenxrq, &ldfmrq, &sdfmrq, &licmin, &licmax, &lcmin, &lcmax,
                                    iopts, opts, &fail);
 	if (fail.code != NE_NOERROR) {
@@ -693,7 +693,7 @@ vector<double> int_energy(variables * send) {
 	licom = licmax;
 	lcom = lcmax;
 
-	/* Allocate remaining arrays. */
+	// Allocate remaining arrays. 
 	if (!(x = NAG_ALLOC((lenx), double)) ||	!(needi = NAG_ALLOC((ni), Integer)) || !(fm = NAG_ALLOC((ldfm) * (sdfm), double)) ||
 		!(dinest = NAG_ALLOC((ni), double)) || !(errest = NAG_ALLOC((ni), double)) ||
 	       	!(com = NAG_ALLOC((lcom), double)) || !(icom = NAG_ALLOC((licom), Integer))){
@@ -701,34 +701,34 @@ vector<double> int_energy(variables * send) {
 		exit(EXIT_FAILURE);
 	}
 
-	/* Solve phase. */
+	// Solve phase. 
 	INIT_FAIL(fail);
-	/* Set initial irevcm. */
+	// Set initial irevcm. 
 	irevcm = 1;
 	while (irevcm) {
-		/* nag_quad_1d_gen_vec_multi_rcomm (d01rac).
-		 * One-dimensional quadrature, adaptive, vectorized, multi-integral,
-		 * reverse communication.
-		 */
+		 //nag_quad_1d_gen_vec_multi_rcomm (d01rac).
+		 //One-dimensional quadrature, adaptive, vectorized, multi-integral,
+		 //reverse communication.
+		 // 
 		nag_quad_1d_gen_vec_multi_rcomm(&irevcm, ni, a, b, &sid, needi, x, lenx, &nx, fm, ldfm,
                                     dinest, errest, iopts, opts, icom, licom, com, lcom, &fail);
 		switch (irevcm) {
 			case 11:
-				/* Initial returns.
-				 * These will occur during the non-adaptive phase.
-				 * All values must be supplied.
-				 * dinest and errest do not contain approximations over the complete
-			 	 * interval at this stage.
-				 */
+				// Initial returns.
+				// These will occur during the non-adaptive phase.
+				// All values must be supplied.
+				// dinest and errest do not contain approximations over the complete
+			 	// interval at this stage.
+				// 
 				pass(x, nx, ldfm, fm, needi, send);
 				break;
 			case 12:
-				/* Intermediate returns.
-				 * These will occur during the adaptive phase.
-				 * All requested values must be supplied.
-				 * dinest and errest contain approximations over the complete
-				 * interval at this stage.
-				 */
+				// Intermediate returns.
+				// These will occur during the adaptive phase.
+				// All requested values must be supplied.
+				// dinest and errest contain approximations over the complete
+				// interval at this stage.
+				// 
 				pass(x, nx, ldfm, fm, needi, send);
 				break;
 		}
@@ -873,10 +873,24 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	Vector3d X;
 	X << 1, 0, 0;//TODO do we need to do this above, where MgO puts NN with exp beyond 1..?
 	
+	/* for (int k = 0; k < Fe_pos.size(); k++){ */
+	/* 	if (abs(Fe_pos[k](1) - Fe_basis[0](1)) < 1e-5) */ 
+	/* 		cout<<(Fe_pos[k] - Fe_basis[0]).transpose()<<endl; */
+	/* } */
 	FM_NM_dn_12 = InPlaneH(Fe_Au_pos, X + lat_Fe_Au - Fe_basis[1], iron_gold_dn, x, z);
 	FM_NM_dn_21 = InPlaneH(Fe_Au_pos, -(X + lat_Fe_Au - Fe_basis[1]), iron_gold_dn, x, z);
 	FM_NM_up_12 = InPlaneH(Fe_Au_pos, X + lat_Fe_Au - Fe_basis[1], iron_gold_up, x, z);
 	FM_NM_up_21 = InPlaneH(Fe_Au_pos, -(X + lat_Fe_Au - Fe_basis[1]), iron_gold_up, x, z);
+	/* cout<<endl; */
+	/* for (int k = 0; k < Fe_Au_pos.size(); k++){ */
+	/* 	if (abs(Fe_Au_pos[k](1) -X(1) - lat_Fe_Au(1) +  Fe_basis[1](1)) < 1e-5) */ 
+	/* 		cout<<(Fe_Au_pos[k] -X - lat_Fe_Au +  Fe_basis[1]).transpose()<<endl; */
+	/* } */
+	/* cout<<endl; */
+	/* for (int k = 0; k < Fe_Au_pos.size(); k++){ */
+	/* 	if (abs(Fe_Au_pos[k](1) +X(1) + lat_Fe_Au(1) -  Fe_basis[1](1)) < 1e-5) */ 
+	/* 		cout<<(Fe_Au_pos[k] +X + lat_Fe_Au -  Fe_basis[1]).transpose()<<endl; */
+	/* } */
 
 	NM_FM_up_T_11 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[0] - Au_basis[0], gold_iron_up, x, z);
 	NM_FM_up_T_12 = InPlaneH(Au_Fe_pos, lat_Au_Fe + Fe_basis[1] - Au_basis[0], gold_iron_up, x, z);
@@ -1003,6 +1017,35 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	odd_l1_dn_T2.bottomLeftCorner(9,9) = NM_T_21;
 	odd_l1_dn_T2.bottomRightCorner(9,9) = NM_T_ii;
 
+	/* cout<<odd_l1_up.real()<<endl<<endl; */
+	/* cout<<odd_l1_up_T1.real()<<endl<<endl; */
+	/* cout<<odd_l1_up_T2.real()<<endl<<endl; */
+	/* cout<<odd_l1_dn.real()<<endl<<endl; */
+	/* cout<<odd_l1_dn_T1.real()<<endl<<endl; */
+	/* cout<<odd_l1_dn_T2.real()<<endl<<endl; */
+	
+	/* cout<<NM<<endl<<endl; */
+	/* cout<<ins<<endl<<endl; */
+	/* cout<<FM_up<<endl<<endl; */
+	/* cout<<NM<<endl<<endl; */
+	/* cout<<FM_up<<endl<<endl; */
+
+	/* cout<<NM<<endl<<endl; */
+	/* cout<<ins<<endl<<endl; */
+	/* cout<<FM_dn<<endl<<endl; */
+	/* cout<<NM<<endl<<endl; */
+	/* cout<<FM_dn<<endl<<endl; */
+
+	/* cout<<NM_T<<endl<<endl; */
+	/* cout<<ins_NM_T<<endl<<endl; */
+	/* cout<<ins_T<<endl<<endl; */
+	/* cout<<ins_FM_dn_T<<endl<<endl; */
+	/* cout<<FM_dn_T<<endl<<endl; */
+	/* cout<<FM_NM_dn_T<<endl<<endl; */
+	/* cout<<NM_T<<endl<<endl; */
+	/* cout<<NM_FM_dn_T<<endl<<endl; */
+	/* cout<<FM_dn_T<<endl<<endl; */
+
 	send->NM = &NM;
 	send->NM_T = &NM_T;
 	send->FM_up = &FM_up;
@@ -1039,6 +1082,7 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	result2.reserve(N);
 	for (int l = 0; l < N; l++)
 		result2[l] = 0.;
+
 	dcomp i;
 	i = -1.;
 	i = sqrt(i);
@@ -1060,6 +1104,7 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 				result2[l] += kT*integrate[l]; 
 		}
 	}
+
 	vector<double> total;
 	total.reserve(N);
 	for (int l = 0; l < N; l++)
@@ -1119,7 +1164,7 @@ int main()
 	double Au_nn_dist, Au_nnn_dist, Au_nnnn_dist;
 	Au_nn_dist = M_SQRT2/2.;
 	Au_nnn_dist = 1.;
-	Au_nnnn_dist = 0;//this tells the code to ignore
+	Au_nnnn_dist = M_SQRT2;//this relates to zero hoppings
 
 	//This section defines the basis atoms and lattice vectors for MgO 
 	Vector3d MgO_bas1, MgO_bas2, tmp_vec;
@@ -1255,6 +1300,71 @@ int main()
 		tmp = gmean(Mg2[k], O2[k]);
 		Mg_O2.emplace_back(tmp);
 	}
+
+					/* cout<<"AuMg 1"<<endl; */
+					/* for (int kk = 0; kk < AuMg1.size(); kk++) */
+					/* 	cout<<AuMg1[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"AuMg 2"<<endl; */
+					/* for (int kk = 0; kk < AuMg2.size(); kk++) */
+					/* 	cout<<AuMg2[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"AuMg 3"<<endl; */
+					/* for (int kk = 0; kk < AuMg3.size(); kk++) */
+					/* 	cout<<AuMg3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"AuO 1"<<endl; */
+					/* for (int kk = 0; kk < AuO1.size(); kk++) */
+					/* 	cout<<AuO1[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"AuO 2"<<endl; */
+					/* for (int kk = 0; kk < AuO2.size(); kk++) */
+					/* 	cout<<AuO2[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"AuO 3"<<endl; */
+					/* for (int kk = 0; kk < AuO3.size(); kk++) */
+					/* 	cout<<AuO3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"MgFe 1"<<endl; */
+					/* for (int kk = 0; kk < MgFe_u1.size(); kk++) */
+					/* 	cout<<MgFe_u1[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"MgFe 2"<<endl; */
+					/* for (int kk = 0; kk < MgFe_u2.size(); kk++) */
+					/* 	cout<<MgFe_u2[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"MgFe 3"<<endl; */
+					/* for (int kk = 0; kk < MgFe_close_u3.size(); kk++) */
+					/* 	cout<<MgFe_close_u3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"MgFe 3"<<endl; */
+					/* for (int kk = 0; kk < MgFe_u3.size(); kk++) */
+					/* 	cout<<MgFe_u3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"FeAu 1"<<endl; */
+					/* for (int kk = 0; kk < FeAu_u1.size(); kk++) */
+					/* 	cout<<FeAu_u1[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"FeAu 2"<<endl; */
+					/* for (int kk = 0; kk < FeAu_close_u2.size(); kk++) */
+					/* 	cout<<FeAu_close_u2[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"FeAu 2"<<endl; */
+					/* for (int kk = 0; kk < FeAu_u2.size(); kk++) */
+					/* 	cout<<FeAu_u2[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"FeAu 3"<<endl; */
+					/* for (int kk = 0; kk < FeAu_close_u3.size(); kk++) */
+					/* 	cout<<FeAu_close_u3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"FeAu 3"<<endl; */
+					/* for (int kk = 0; kk < FeAu_u3.size(); kk++) */
+					/* 	cout<<FeAu_u3[kk]<<endl; */
+					/* cout<<endl; */
+					/* cout<<"MgO 2"<<endl; */
+					/* for (int kk = 0; kk < Mg_O2.size(); kk++) */
+					/* 	cout<<Mg_O2[kk]<<endl; */
+					/* cout<<endl; */
 
 	//This section generates the Hamiltonians from SK parameters and NN positions
 	double x, y, z;
@@ -2241,8 +2351,10 @@ int main()
 	variables send;
 	send.kT = kT;
 	send.Ef = Ef;
-	send.x = 2.532374; //for now!
-	send.z = 2.532374; //for now!
+	send.x = 2.745644; //for now!
+	send.z = 2.745644; //for now!
+	/* send.x = 2.532374; //for now! */
+	/* send.z = 2.532374; //for now! */
 	send.Au_lat_oop = &Au_lat_oop;
 	send.MgO_lat_oop = &MgO_lat_oop;
 	send.Fe_lat_oop = &Fe_lat_oop;
