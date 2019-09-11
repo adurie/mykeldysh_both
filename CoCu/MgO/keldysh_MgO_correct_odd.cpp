@@ -18,7 +18,6 @@
 #define EIGEN_DONT_PARALLELIZE
 #define EIGEN_USE_MKL_ALL
 //TODO important note - presently the code assumes fcc only - integration
-//TODO need to put the odd layer on LH lead.. needs to be coded in f, f_vec, int_theta, int_theta_E
 
 using namespace Eigen;
 using namespace std;
@@ -107,8 +106,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	return result;
 }
 
- vector<double> f_vec(const double theta, const dcomp E, variables * send, const MatrixXcd &GL_UP_e, const MatrixXcd &GL_DN_e,  
- 		const MatrixXcd &GL_UP_o, const MatrixXcd &GL_DN_o, const MatrixXcd &Gr_up, const MatrixXcd &Gr_dn) { 
+ vector<double> f_vec(const double theta, const dcomp E, variables * send, const MatrixXcd &GR_UP_e, const MatrixXcd &GR_DN_e,  
+ 		const MatrixXcd &GR_UP_o, const MatrixXcd &GR_DN_o, const MatrixXcd &Gl_up, const MatrixXcd &Gl_dn) { 
  	dcomp i = -1; 
  	i = sqrt(i); 
  	double V = send->V; 
@@ -123,22 +122,18 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	vMXd HTd = *send->HTd;
  	MatrixXcd NM = HUu[3]; 
  	MatrixXcd NM_T = HTu[6]; 
- 	MatrixXcd NM_FM_up_T = HTu[7]; 
- 	MatrixXcd NM_FM_dn_T = HTd[7]; 
 
- 	MatrixXcd GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd; 
- 	GL_up_even = GL_UP_e; 
- 	GL_dn_even = GL_DN_e; 
- 	GL_up_odd = GL_UP_o; 
- 	GL_dn_odd = GL_DN_o; 
- 	MatrixXcd GR_up, GR_dn; 
- 	MatrixXcd GR(n2,n2); 
+ 	MatrixXcd GR_up_even, GR_dn_even, GR_up_odd, GR_dn_odd; 
+ 	GR_up_even = GR_UP_e; 
+ 	GR_dn_even = GR_DN_e; 
+ 	GR_up_odd = GR_UP_o; 
+ 	GR_dn_odd = GR_DN_o; 
+ 	MatrixXcd GL_up, GL_dn; 
+	GL_up = Gl_up;
+	GL_dn = Gl_dn;
+ 	MatrixXcd GL(n2,n2); 
  	MatrixXcd NM_T_dagg; 
  	NM_T_dagg = NM_T.adjoint(); 
- 	MatrixXcd NM_FM_up_T_dagg; 
- 	MatrixXcd NM_FM_dn_T_dagg; 
- 	NM_FM_up_T_dagg = NM_FM_up_T.adjoint(); 
- 	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint(); 
  	MatrixXcd I = MatrixXcd::Identity(n,n); 
  	MatrixXcd S(n2,n2); 
  	MatrixXcd S11, S12; 
@@ -150,18 +145,17 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	S.bottomRightCorner(n,n) = S11; 
 
  	MatrixXcd OM = E*I; 
- 	//adlayer one bilayer onto RHS G to ensure gmean is correct 
- 	//this means 2 layers are on before we begin! 
- 	GR_up = (OM - (NM - V*I)-NM_FM_up_T*Gr_up*NM_FM_up_T_dagg).inverse();//TODO is this correct before rotating..? 
- 	GR_dn = (OM - (NM - V*I)-NM_FM_dn_T*Gr_dn*NM_FM_dn_T_dagg).inverse(); 
- 	GR.fill(0.); 
- 	GR.topLeftCorner(n,n) = GR_up; 
- 	GR.bottomRightCorner(n,n) = GR_dn; 
+ 	MatrixXcd GR_even(n2,n2), GR_odd(n2,n2), GR_dagg_even(n2,n2), GR_dagg_odd(n2,n2); 
+ 	GR_even.fill(0.); 
+ 	GR_odd.fill(0.); 
+ 	GR_even.topLeftCorner(n,n) = GR_up_even; 
+ 	GR_even.bottomRightCorner(n,n) = GR_dn_even; 
+ 	GR_odd.topLeftCorner(n,n) = GR_up_odd; 
+ 	GR_odd.bottomRightCorner(n,n) = GR_dn_odd; 
 
- 	MatrixXcd GL_even(n2,n2), GL_odd(n2,n2), GR_dagg(n2,n2); 
- 	GL_even.fill(0.); 
- 	GL_odd.fill(0.); 
- 	GR = S.inverse()*GR*S; 
+ 	GL.fill(0.); 
+ 	GR_even = S.inverse()*GR_even*S; 
+ 	GR_odd = S.inverse()*GR_odd*S; 
 
  	MatrixXcd Ibig = MatrixXcd::Identity(n2,n2); 
  	MatrixXcd OMbig = E*Ibig; 
@@ -169,7 +163,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	NMbig.fill(0.); 
  	NMbig.topLeftCorner(n,n) = NM; 
  	NMbig.bottomRightCorner(n,n) = NM; 
- 	GR_dagg = GR.adjoint(); 
+ 	GR_dagg_even = GR_even.adjoint(); 
+ 	GR_dagg_odd = GR_odd.adjoint(); 
 
 	 MatrixXcd Pauli(n2,n2);//This is the y Pauli sigma Matrix 
 	 Pauli.fill(0.); 
@@ -187,9 +182,12 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	T.topLeftCorner(n,n) = NM_T; 
  	T.bottomRightCorner(n,n) = NM_T; 
  	Tdagg = T.adjoint(); 
- 	MatrixXcd GR_T_dagg, GR_dagg_T_dagg; 
- 	GR_T_dagg = GR*Tdagg; 
- 	GR_dagg_T_dagg = GR_dagg*Tdagg; 
+ 	MatrixXcd GR_T_dagg_even, GR_dagg_T_dagg_even; 
+ 	MatrixXcd GR_T_dagg_odd, GR_dagg_T_dagg_odd; 
+ 	GR_T_dagg_even = GR_even*Tdagg; 
+ 	GR_T_dagg_odd = GR_odd*Tdagg; 
+ 	GR_dagg_T_dagg_even = GR_dagg_even*Tdagg; 
+ 	GR_dagg_T_dagg_odd = GR_dagg_odd*Tdagg; 
  	MatrixXcd tmp1, tmp2; 
  	vector<double> result; 
  	result.reserve(N); 
@@ -197,30 +195,26 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	//because of gmean behaviour. See questions.txt 
  //adlayer layer 2 from layer 1 to spacer thickness, N 
  	for (int it=0; it < N/2; ++it){ 
- 		GL_even.topLeftCorner(n,n) = GL_up_even; 
- 		GL_even.bottomRightCorner(n,n) = GL_dn_even; 
- 		GL_odd.topLeftCorner(n,n) = GL_up_odd; 
- 		GL_odd.bottomRightCorner(n,n) = GL_dn_odd; 
- 		A_even = (Ibig-GR_T_dagg*GL_even*T).inverse(); 
- 		B_even = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse(); 
- 		A_odd = (Ibig-GR_T_dagg*GL_odd*T).inverse(); 
- 		B_odd = (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse(); 
+ 		GL.topLeftCorner(n,n) = GL_up; 
+ 		GL.bottomRightCorner(n,n) = GL_dn; 
+ 		A_even = (Ibig-GR_T_dagg_even*GL*T).inverse(); 
+ 		B_even = (Ibig-GR_dagg_T_dagg_even*GL.adjoint()*T).inverse(); 
+ 		A_odd = (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
+ 		B_odd = (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
  		TOT_even = (B_even.adjoint()-A_even)*Pauli; 
  		TOT_odd = (B_odd.adjoint()-A_odd)*Pauli; 
  		spincurrent_even = .25*imag(TOT_even.trace()); 
  		spincurrent_odd = .25*imag(TOT_odd.trace()); 
  		result.emplace_back(spincurrent_even); 
  		result.emplace_back(spincurrent_odd); 
- 		GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse(); 
- 		GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse(); 
- 		GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse(); 
- 		GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse(); 
+ 		GL_up = (OM - (NM - V*I) -NM_T_dagg*GL_up*NM_T).inverse(); 
+ 		GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL_dn*NM_T).inverse(); 
  	} 
  	return result; 
  } 
 
- void f(double * spincurrent, const double theta, const dcomp E, int k, Integer * needi, variables * send, const MatrixXcd &GL_UP_even,  
- 		const MatrixXcd &GL_DN_even, const MatrixXcd &GL_UP_odd, const MatrixXcd &GL_DN_odd, const MatrixXcd &Gr_up, const MatrixXcd &Gr_dn) { 
+ void f(double * spincurrent, const double theta, const dcomp E, int k, Integer * needi, variables * send, const MatrixXcd &GR_UP_even,  
+ 		const MatrixXcd &GR_DN_even, const MatrixXcd &GR_UP_odd, const MatrixXcd &GR_DN_odd, const MatrixXcd &Gl_up, const MatrixXcd &Gl_dn) { 
  // ...NM|ins|FM(0)|NM(n)|FM(theta)... 
  	dcomp i = -1; 
  	i = sqrt(i); 
@@ -236,22 +230,18 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	vMXd HTd = *send->HTd;
  	MatrixXcd NM = HUu[3]; 
  	MatrixXcd NM_T = HTu[6]; 
- 	MatrixXcd NM_FM_up_T = HTu[7]; 
- 	MatrixXcd NM_FM_dn_T = HTd[7]; 
 
- 	MatrixXcd GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd; 
- 	GL_up_even = GL_UP_even; 
- 	GL_dn_even = GL_DN_even; 
- 	GL_up_odd = GL_UP_odd; 
- 	GL_dn_odd = GL_DN_odd; 
- 	MatrixXcd GR_up, GR_dn; 
- 	MatrixXcd GR(n2,n2); 
+ 	MatrixXcd GR_up_even, GR_dn_even, GR_up_odd, GR_dn_odd; 
+ 	GR_up_even = GR_UP_even; 
+ 	GR_dn_even = GR_DN_even; 
+ 	GR_up_odd = GR_UP_odd; 
+ 	GR_dn_odd = GR_DN_odd; 
+	MatrixXcd GR_odd(n2,n2), GR_even(n2,n2);
+ 	MatrixXcd GL_up, GL_dn; 
+	GL_up = Gl_up;
+	GL_dn = Gl_dn;
  	MatrixXcd NM_T_dagg; 
  	NM_T_dagg = NM_T.adjoint(); 
- 	MatrixXcd NM_FM_up_T_dagg; 
- 	MatrixXcd NM_FM_dn_T_dagg; 
- 	NM_FM_up_T_dagg = NM_FM_up_T.adjoint(); 
- 	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint(); 
  	MatrixXcd I = MatrixXcd::Identity(n,n); 
  	MatrixXcd S(n2,n2); 
  	MatrixXcd S11, S12; 
@@ -263,18 +253,17 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	S.bottomRightCorner(n,n) = S11; 
 
  	MatrixXcd OM = E*I; 
- 	//adlayer one bilayer onto RHS G to ensure gmean is correct 
- 	//this means 2 layers are on before we begin! 
- 	GR_up = (OM - (NM - V*I)-NM_FM_up_T*Gr_up*NM_FM_up_T_dagg).inverse();//TODO is this correct before rotating..? 
- 	GR_dn = (OM - (NM - V*I)-NM_FM_dn_T*Gr_dn*NM_FM_dn_T_dagg).inverse(); 
- 	GR.fill(0.); 
- 	GR.topLeftCorner(n,n) = GR_up; 
- 	GR.bottomRightCorner(n,n) = GR_dn; 
+ 	GR_even.fill(0.); 
+ 	GR_even.topLeftCorner(n,n) = GR_up_even; 
+ 	GR_even.bottomRightCorner(n,n) = GR_dn_even; 
+ 	GR_odd.fill(0.); 
+ 	GR_odd.topLeftCorner(n,n) = GR_up_odd; 
+ 	GR_odd.bottomRightCorner(n,n) = GR_dn_odd; 
 
- 	MatrixXcd GL_even(n2,n2), GL_odd(n2,n2), GR_dagg(n2,n2); 
- 	GL_even.fill(0.); 
- 	GL_odd.fill(0.); 
- 	GR = S.inverse()*GR*S; 
+ 	MatrixXcd GL(n2,n2), GR_dagg_even(n2,n2), GR_dagg_odd(n2,n2); 
+ 	GL.fill(0.); 
+ 	GR_even = S.inverse()*GR_even*S; 
+ 	GR_odd = S.inverse()*GR_odd*S; 
 
  	MatrixXcd Ibig = MatrixXcd::Identity(n2,n2); 
  	MatrixXcd OMbig = E*Ibig; 
@@ -282,7 +271,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	NMbig.fill(0.); 
  	NMbig.topLeftCorner(n,n) = NM; 
  	NMbig.bottomRightCorner(n,n) = NM; 
- 	GR_dagg = GR.adjoint(); 
+ 	GR_dagg_even = GR_even.adjoint(); 
+ 	GR_dagg_odd = GR_odd.adjoint(); 
 
  	MatrixXcd Pauli(n2,n2);//This is the y Pauli sigma Matrix 
  	Pauli.fill(0.); 
@@ -295,9 +285,12 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	T.topLeftCorner(n,n) = NM_T; 
  	T.bottomRightCorner(n,n) = NM_T; 
  	Tdagg = T.adjoint(); 
- 	MatrixXcd GR_T_dagg, GR_dagg_T_dagg; 
- 	GR_T_dagg = GR*Tdagg; 
- 	GR_dagg_T_dagg = GR_dagg*Tdagg; 
+ 	MatrixXcd GR_T_dagg_even, GR_dagg_T_dagg_even; 
+ 	MatrixXcd GR_T_dagg_odd, GR_dagg_T_dagg_odd; 
+ 	GR_T_dagg_even = GR_even*Tdagg; 
+ 	GR_T_dagg_odd = GR_odd*Tdagg; 
+ 	GR_dagg_T_dagg_even = GR_dagg_even*Tdagg; 
+ 	GR_dagg_T_dagg_odd = GR_dagg_odd*Tdagg; 
  	MatrixXcd tmp1, tmp2; 
  	//TODO at the moment, this is only accurate from N = 4... 
  	//because of gmean behaviour. See questions.txt 
@@ -313,36 +306,34 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 
  	for (int it=0; it < kl/2; ++it){ 
  		if (needi[2*it] == 1){ 
- 			GL_even.topLeftCorner(n,n) = GL_up_even; 
- 			GL_even.bottomRightCorner(n,n) = GL_dn_even; 
- 			A = (Ibig-GR_T_dagg*GL_even*T).inverse(); 
- 			B = (Ibig-GR_dagg_T_dagg*GL_even.adjoint()*T).inverse(); 
- 			tmp1 = B*GR_dagg_T_dagg; 
+ 			GL.topLeftCorner(n,n) = GL_up; 
+ 			GL.bottomRightCorner(n,n) = GL_dn; 
+ 			A = (Ibig-GR_T_dagg_even*GL*T).inverse(); 
+ 			B = (Ibig-GR_dagg_T_dagg_even*GL.adjoint()*T).inverse(); 
+ 			tmp1 = B*GR_dagg_T_dagg_even; 
  			tmp2 = A*tmp1; 
  			tmp1 = T*tmp2; 
- 			tmp2 = GL_even*tmp1; 
+ 			tmp2 = GL*tmp1; 
  			TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
  			spincurrent[2*it] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); 
  		} 
 
  		if (needi[2*it + 1] == 1){ 
- 			GL_odd.topLeftCorner(n,n) = GL_up_odd; 
- 			GL_odd.bottomRightCorner(n,n) = GL_dn_odd; 
- 			A= (Ibig-GR_T_dagg*GL_odd*T).inverse(); 
- 			B= (Ibig-GR_dagg_T_dagg*GL_odd.adjoint()*T).inverse(); 
- 			tmp1 = B*GR_dagg_T_dagg; 
+ 			GL.topLeftCorner(n,n) = GL_up; 
+ 			GL.bottomRightCorner(n,n) = GL_dn; 
+ 			A= (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
+ 			B= (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
+ 			tmp1 = B*GR_dagg_T_dagg_odd; 
  			tmp2 = A*tmp1; 
  			tmp1 = T*tmp2; 
- 			tmp2 = GL_odd*tmp1; 
+ 			tmp2 = GL*tmp1; 
  			TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
  			spincurrent[2*it + 1] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); 
  		} 
 
  		if (it != kl/2 - 1){//saves wasting unused results 
- 			GL_up_even = (OM - (NM - V*I) -NM_T_dagg*GL_up_even*NM_T).inverse(); 
- 			GL_dn_even = (OM - (NM - V*I) -NM_T_dagg*GL_dn_even*NM_T).inverse(); 
- 			GL_up_odd = (OM - (NM - V*I) -NM_T_dagg*GL_up_odd*NM_T).inverse(); 
- 			GL_dn_odd = (OM - (NM - V*I) -NM_T_dagg*GL_dn_odd*NM_T).inverse(); 
+ 			GL_up = (OM - (NM - V*I) -NM_T_dagg*GL_up*NM_T).inverse(); 
+ 			GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL_dn*NM_T).inverse(); 
  		} 
  	} 
  } 
@@ -377,6 +368,12 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	MatrixXcd ins_FM_up_T = HTu[3]; 
  	MatrixXcd ins_FM_dn_T = HTd[3]; 
  	MatrixXcd ins_NM_T = HTu[1]; 
+ 	MatrixXcd NM_FM_up_T = HTu[7]; 
+ 	MatrixXcd NM_FM_dn_T = HTd[7]; 
+ 	MatrixXcd NM_FM_up_T_dagg; 
+ 	MatrixXcd NM_FM_dn_T_dagg; 
+ 	NM_FM_up_T_dagg = NM_FM_up_T.adjoint(); 
+ 	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint(); 
  	double V = send->V; 
 
  	MatrixXcd I = MatrixXcd::Identity(n,n); 
@@ -386,8 +383,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 
  	MatrixXcd FM_up_T_dagg = FM_up_T.adjoint(); 
  	MatrixXcd FM_dn_T_dagg = FM_dn_T.adjoint(); 
- 	MatrixXcd GR_up = gs(OMup, FM_up_T_dagg, numbas); 
- 	MatrixXcd GR_dn = gs(OMdn, FM_dn_T_dagg, numbas); 
+ 	MatrixXcd GR_up_even = gs(OMup, FM_up_T_dagg, numbas); 
+ 	MatrixXcd GR_dn_even = gs(OMdn, FM_dn_T_dagg, numbas); 
  	MatrixXcd FM_NM_up_T_dagg = FM_NM_up_T.adjoint(); 
  	MatrixXcd FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint(); 
  	MatrixXcd NM_T_dagg = NM_T.adjoint(); 
@@ -397,8 +394,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	/* MatrixXcd GL_dn = gs(OMdn, FM_T, numbas); */ 
 
  	//this below block for 5 layer 
- 	MatrixXcd GL_up_even = gs(OM - NM, NM_T, numbas); 
- 	MatrixXcd GL_dn_even = GL_up_even; 
+ 	MatrixXcd GL_up = gs(OM - NM, NM_T, numbas); 
+ 	MatrixXcd GL_dn = GL_up; 
  	//this below block for 5 layer 
  //lim is thickness of layer 2 
  	MatrixXcd ins_T_dagg = ins_T.adjoint(); 
@@ -410,40 +407,44 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites 
  		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer) 
  		if (it == 0){ 
- 			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse(); 
- 			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse(); 
+ 			GL_up = (OM - ins -ins_T_dagg*GL_up*ins_T).inverse(); 
+ 			GL_dn = (OM - ins -ins_T_dagg*GL_dn*ins_T).inverse(); 
  		} 
  		else { 
- 			GL_up_even = (OM - ins -ins_NM_T_dagg*GL_up_even*ins_NM_T).inverse(); 
- 			GL_dn_even = (OM - ins -ins_NM_T_dagg*GL_dn_even*ins_NM_T).inverse(); 
+ 			GL_up = (OM - ins -ins_NM_T_dagg*GL_up*ins_NM_T).inverse(); 
+ 			GL_dn = (OM - ins -ins_NM_T_dagg*GL_dn*ins_NM_T).inverse(); 
  		} 
  	} 
  //lim2 is thickness of layer 3 
  //build thickness of layer 3 to lim2 layers 
  //add 10 bilayers i.e. 20 layers of FM 
- 	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse(); 
- 	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse(); 
+ 	GL_up = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
+ 	GL_dn = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
  	for (int it=0; it < lim2 - 1; ++it){ 
- 		GL_up_even = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up_even*FM_up_T).inverse(); 
- 		GL_dn_even = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn_even*FM_dn_T).inverse(); 
+ 		GL_up = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up*FM_up_T).inverse(); 
+ 		GL_dn = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn*FM_dn_T).inverse(); 
  	} 
 
- 	MatrixXcd GL_up_odd = GL_up_even; 
- 	MatrixXcd GL_dn_odd = GL_dn_even; 
  	MatrixXcd odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint(); 
  	MatrixXcd odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint(); 
  	MatrixXcd odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint(); 
  	MatrixXcd odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint(); 
- 	//adlayer one bilayer onto LHS G_even to ensure gmean is correct 
+ 	MatrixXcd GR_up_odd = GR_up_even; 
+ 	MatrixXcd GR_dn_odd = GR_dn_even; 
+ 	//adlayer one bilayer onto RHS & LHS G to ensure gmean is correct 
  	//this means 2 layers are on before we begin! 
- 	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse(); 
- 	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse(); 
+ 	GL_up = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up*FM_NM_up_T).inverse(); 
+ 	GL_dn = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn*FM_NM_dn_T).inverse(); 
+ 	GR_up_even = (OM - (NM - V*I)-NM_FM_up_T*GR_up_even*NM_FM_up_T_dagg).inverse();
+ 	GR_dn_even = (OM - (NM - V*I)-NM_FM_dn_T*GR_dn_even*NM_FM_dn_T_dagg).inverse(); 
  	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a  
  	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin! 
- 	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse(); 
- 	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse(); 
- 	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse(); 
- 	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse(); 
+ 	GR_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T2*GR_up_odd*odd_l1_up_T2_dagg).inverse(); 
+ 	GR_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T2*GR_dn_odd*odd_l1_dn_T2_dagg).inverse(); 
+ 	GR_up_odd = (OM - (NM - V*I) -odd_l1_up_T1*GR_up_odd*odd_l1_up_T1_dagg).inverse(); 
+ 	GR_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T1*GR_dn_odd*odd_l1_dn_T1_dagg).inverse(); 
+ 	//adlayer one bilayer onto LHS G_even to ensure gmean is correct 
+ 	//this means 2 layers are on before we begin! 
  	int N = send->N; 
  	result.reserve(N); 
  	integrate.reserve(N); 
@@ -457,7 +458,7 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	/* const int nn = 1; */ 
  	for (int k=0; k<nn+1; k++) { 
  		theta = k*M_PI/nn; 
- 		integrate = f_vec(theta, E, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn); 
+ 		integrate = f_vec(theta, E, send, GR_up_even, GR_dn_even, GR_up_odd, GR_dn_odd, GL_up, GL_dn); 
  		for (int i = 0; i < N; i++){ 
  			if ((k==0)||(k==nn)) 
  				result[i] += M_PI*(0.5/nn)*integrate[i]; 
@@ -499,6 +500,12 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	MatrixXcd ins_FM_up_T = HTu[3]; 
  	MatrixXcd ins_FM_dn_T = HTd[3]; 
  	MatrixXcd ins_NM_T = HTu[1]; 
+ 	MatrixXcd NM_FM_up_T = HTu[7]; 
+ 	MatrixXcd NM_FM_dn_T = HTd[7]; 
+ 	MatrixXcd NM_FM_up_T_dagg; 
+ 	MatrixXcd NM_FM_dn_T_dagg; 
+ 	NM_FM_up_T_dagg = NM_FM_up_T.adjoint(); 
+ 	NM_FM_dn_T_dagg = NM_FM_dn_T.adjoint(); 
  	double V = send->V; 
 
  	MatrixXcd I = MatrixXcd::Identity(n,n); 
@@ -508,8 +515,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 
  	MatrixXcd FM_up_T_dagg = FM_up_T.adjoint(); 
  	MatrixXcd FM_dn_T_dagg = FM_dn_T.adjoint(); 
- 	MatrixXcd GR_up = gs(OMup, FM_up_T_dagg, numbas); 
- 	MatrixXcd GR_dn = gs(OMdn, FM_dn_T_dagg, numbas); 
+ 	MatrixXcd GR_up_even = gs(OMup, FM_up_T_dagg, numbas); 
+ 	MatrixXcd GR_dn_even = gs(OMdn, FM_dn_T_dagg, numbas); 
  	MatrixXcd FM_NM_up_T_dagg = FM_NM_up_T.adjoint(); 
  	MatrixXcd FM_NM_dn_T_dagg = FM_NM_dn_T.adjoint(); 
  	MatrixXcd NM_T_dagg = NM_T.adjoint(); 
@@ -519,8 +526,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	/* MatrixXcd GL_dn = gs(OMdn, FM_T, numbas); */ 
 
  	//this below block for 5 layer 
- 	MatrixXcd GL_up_even = gs(OM - NM, NM_T, numbas); 
- 	MatrixXcd GL_dn_even = GL_up_even; 
+ 	MatrixXcd GL_up = gs(OM - NM, NM_T, numbas); 
+ 	MatrixXcd GL_dn = GL_up; 
  	//this below block for 5 layer 
  //lim is thickness of layer 2 
 	vector<int> thick = *send->thick;
@@ -532,39 +539,41 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	for (int it=0; it < lim; ++it){//TODO the diagonal elements need to be shifted by the same amount in halites 
  		ins = ins - I*(V*it/(lim*1.));//TODO changed this so that full bias isn't on last layer so if lim = 1 then shift = 0, 1/2 (so 1 falls on next layer) 
  		if (it == 0){ 
- 			GL_up_even = (OM - ins -ins_T_dagg*GL_up_even*ins_T).inverse(); 
- 			GL_dn_even = (OM - ins -ins_T_dagg*GL_dn_even*ins_T).inverse(); 
+ 			GL_up = (OM - ins -ins_T_dagg*GL_up*ins_T).inverse(); 
+ 			GL_dn = (OM - ins -ins_T_dagg*GL_dn*ins_T).inverse(); 
  		} 
  		else { 
- 			GL_up_even = (OM - ins -ins_NM_T_dagg*GL_up_even*ins_NM_T).inverse(); 
- 			GL_dn_even = (OM - ins -ins_NM_T_dagg*GL_dn_even*ins_NM_T).inverse(); 
+ 			GL_up = (OM - ins -ins_NM_T_dagg*GL_up*ins_NM_T).inverse(); 
+ 			GL_dn = (OM - ins -ins_NM_T_dagg*GL_dn*ins_NM_T).inverse(); 
  		} 
  	} 
  //lim2 is thickness of layer 3 
  //build thickness of layer 3 to lim2 layers 
- 	GL_up_even = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up_even*ins_FM_up_T).inverse(); 
- 	GL_dn_even = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn_even*ins_FM_dn_T).inverse(); 
+ 	GL_up = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
+ 	GL_dn = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
  	for (int it=0; it < lim2 - 1; ++it){ 
- 		GL_up_even = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up_even*FM_up_T).inverse(); 
- 		GL_dn_even = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn_even*FM_dn_T).inverse(); 
+ 		GL_up = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up*FM_up_T).inverse(); 
+ 		GL_dn = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn*FM_dn_T).inverse(); 
  	} 
 
  	MatrixXcd odd_l1_up_T1_dagg = odd_l1_up_T1.adjoint(); 
  	MatrixXcd odd_l1_up_T2_dagg = odd_l1_up_T2.adjoint(); 
  	MatrixXcd odd_l1_dn_T1_dagg = odd_l1_dn_T1.adjoint(); 
  	MatrixXcd odd_l1_dn_T2_dagg = odd_l1_dn_T2.adjoint(); 
- 	MatrixXcd GL_up_odd = GL_up_even; 
- 	MatrixXcd GL_dn_odd = GL_dn_even; 
- 	//adlayer one bilayer onto LHS G_even to ensure gmean is correct 
+ 	MatrixXcd GR_up_odd = GR_up_even; 
+ 	MatrixXcd GR_dn_odd = GR_dn_even; 
+ 	//adlayer one bilayer onto RHS & LHS G to ensure gmean is correct 
  	//this means 2 layers are on before we begin! 
- 	GL_up_even = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up_even*FM_NM_up_T).inverse(); 
- 	GL_dn_even = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn_even*FM_NM_dn_T).inverse(); 
+ 	GL_up = (OM - (NM - V*I) -FM_NM_up_T_dagg*GL_up*FM_NM_up_T).inverse(); 
+ 	GL_dn = (OM - (NM - V*I) -FM_NM_dn_T_dagg*GL_dn*FM_NM_dn_T).inverse(); 
+ 	GR_up_even = (OM - (NM - V*I)-NM_FM_up_T*GR_up_even*NM_FM_up_T_dagg).inverse();
+ 	GR_dn_even = (OM - (NM - V*I)-NM_FM_dn_T*GR_dn_even*NM_FM_dn_T_dagg).inverse(); 
  	//adlayer one bilayer of CoCu onto LHS G for odd layers, then adlayer a  
  	//further bilayer of Cu to ensure gmean is correct. This means 3 layers are on before we begin! 
- 	GL_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T1_dagg*GL_up_odd*odd_l1_up_T1).inverse(); 
- 	GL_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T1_dagg*GL_dn_odd*odd_l1_dn_T1).inverse(); 
- 	GL_up_odd = (OM - (NM - V*I) -odd_l1_up_T2_dagg*GL_up_odd*odd_l1_up_T2).inverse(); 
- 	GL_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T2_dagg*GL_dn_odd*odd_l1_dn_T2).inverse(); 
+ 	GR_up_odd = (OM - (odd_l1_up - V*I) -odd_l1_up_T2*GR_up_odd*odd_l1_up_T2_dagg).inverse(); 
+ 	GR_dn_odd = (OM - (odd_l1_dn - V*I) -odd_l1_dn_T2*GR_dn_odd*odd_l1_dn_T2_dagg).inverse(); 
+ 	GR_up_odd = (OM - (NM - V*I) -odd_l1_up_T1*GR_up_odd*odd_l1_up_T1_dagg).inverse(); 
+ 	GR_dn_odd = (OM - (NM - V*I) -odd_l1_dn_T1*GR_dn_odd*odd_l1_dn_T1_dagg).inverse(); 
 
  	//initialise integration so that they don't all get summed over every E! 
  	for (int ll = 0; ll < N; ll++){ 
@@ -575,7 +584,7 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	/* const int nn = 1; */ 
  	for (int kk=0; kk<nn+1; kk++) { 
  		theta = kk*M_PI/nn; 
- 		f(result, theta, E, k, needi, send, GL_up_even, GL_dn_even, GL_up_odd, GL_dn_odd, GR_up, GR_dn); 
+ 		f(result, theta, E, k, needi, send, GR_up_even, GR_dn_even, GR_up_odd, GR_dn_odd, GL_up, GL_dn); 
  		if ((kk==0)||(kk==nn)){ 
  			for (int ll = 0; ll < N; ll++){ 
  				if (needi[ll] == 1) 
@@ -1145,39 +1154,39 @@ int main()
 	ntype[species(4) + species(2)] = ntype_tmp;
 	dist_tmp.clear();
 	ntype_tmp.clear();
-	//END OF EDITABLE DATA, UNLESS DEBUGGING OR IMPROVING, OR REIMPLEMENTING, DON'T CHANGE THE CODE BELOW
 	
 	//odd layer stuff TODO this will need editing if placement of odd layer changes
 	vvec3 odd_basis;
 	vec3 odd_oop;
 	//old position
-	odd_basis.emplace_back(basis[2]);//Fe edit
-	odd_basis.emplace_back(basis[3]);//Au edit
-	odd_basis.emplace_back(basis[3]);//Au edit
-	odd_basis[1][1] << 0.5, 0.446, 0;
-	odd_oop.emplace_back(lat_oop[species(2)]);
-	odd_oop.emplace_back(lat_oop[species(1) + species(2)]);
-	odd_oop.emplace_back(lat_oop[species(1)]);
-	oddattype[0][0] = species(2);//edit
-	oddattype[0][1] = species(2);//edit
-	oddattype[1][0] = species(2);//edit
-	oddattype[1][1] = species(1);//edit
-	oddattype[2][0] = species(1);//edit
-	oddattype[2][1] = species(1);//edit
-	//new position - next to LH lead
-	/* odd_basis.emplace_back(basis[3]);//Fe edit */
-	/* odd_basis.emplace_back(basis[4]);//Au edit */
-	/* odd_basis.emplace_back(basis[4]);//Au edit */
+	/* odd_basis.emplace_back(basis[2]);//Fe edit */
+	/* odd_basis.emplace_back(basis[3]);//Au edit */
+	/* odd_basis.emplace_back(basis[3]);//Au edit */
 	/* odd_basis[1][1] << 0.5, 0.446, 0; */
-	/* odd_oop.emplace_back(lat_oop[species(1)]); */
-	/* odd_oop.emplace_back(lat_oop[species(2) + species(1)]); */
 	/* odd_oop.emplace_back(lat_oop[species(2)]); */
-	/* oddattype[0][0] = species(1);//edit */
-	/* oddattype[0][1] = species(1);//edit */
-	/* oddattype[1][0] = species(1);//edit */
-	/* oddattype[1][1] = species(2);//edit */
-	/* oddattype[2][0] = species(2);//edit */
-	/* oddattype[2][1] = species(2);//edit */
+	/* odd_oop.emplace_back(lat_oop[species(1) + species(2)]); */
+	/* odd_oop.emplace_back(lat_oop[species(1)]); */
+	/* oddattype[0][0] = species(2);//edit */
+	/* oddattype[0][1] = species(2);//edit */
+	/* oddattype[1][0] = species(2);//edit */
+	/* oddattype[1][1] = species(1);//edit */
+	/* oddattype[2][0] = species(1);//edit */
+	/* oddattype[2][1] = species(1);//edit */
+	//new position - next to LH lead
+	odd_basis.emplace_back(basis[3]);//Fe edit
+	odd_basis.emplace_back(basis[4]);//Au edit
+	odd_basis.emplace_back(basis[4]);//Au edit
+	odd_basis[1][1] << 0.5, 0.446, 0;
+	odd_oop.emplace_back(lat_oop[species(1)]);
+	odd_oop.emplace_back(lat_oop[species(2) + species(1)]);
+	odd_oop.emplace_back(lat_oop[species(2)]);
+	oddattype[0][0] = species(1);//edit
+	oddattype[0][1] = species(1);//edit
+	oddattype[1][0] = species(1);//edit
+	oddattype[1][1] = species(2);//edit
+	oddattype[2][0] = species(2);//edit
+	oddattype[2][1] = species(2);//edit
+	//END OF EDITABLE DATA, UNLESS DEBUGGING OR IMPROVING, OR REIMPLEMENTING, DON'T CHANGE THE CODE BELOW
 
 	//This block creates the SK tight binding Hamiltonians
 	unordered_map<string, M9> onsite_up, onsite_dn;
@@ -1637,10 +1646,10 @@ int main()
 	send.numlay = numlay;
 	send.kT = kT;
 	send.Ef = Ef;
-	send.x = 2.532374; //for now!
-	send.z = 2.532374; //for now!
-	/* send.x = 2.745644; //for now! */
-	/* send.z = 2.745644; //for now! */
+	/* send.x = 2.532374; //for now! Neck position of Cu */
+	/* send.z = 2.532374; //for now! Neck position of Cu */
+	send.x = 2.745644; //for now! Neck position of Au
+	send.z = 2.745644; //for now! Neck position of Au
 	send.lat_oop = &lat_oop;
 	send.odd_oop = &odd_oop;
 	send.pos = &pos;
