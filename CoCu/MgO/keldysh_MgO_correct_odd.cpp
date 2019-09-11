@@ -17,6 +17,8 @@
 #include <iomanip>
 #define EIGEN_DONT_PARALLELIZE
 #define EIGEN_USE_MKL_ALL
+//this now has modified onsite Fe pots when next to MgO, and MgO - atom gmeans
+//TODO very important, the above note means that a different system will require editing
 //TODO important note - presently the code assumes fcc only - integration
 
 using namespace Eigen;
@@ -418,8 +420,36 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  //lim2 is thickness of layer 3 
  //build thickness of layer 3 to lim2 layers 
  //add 10 bilayers i.e. 20 layers of FM 
- 	GL_up = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
- 	GL_dn = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
+	//TODO very important -- this will need to be altered or even removed for a different system
+	int csp5 = -0.310269;//Andrey's technique, modify interface pots of Fe against MgO to get correct magnetic moment
+	int cd5 = 4.9467782e-3;
+	MatrixXcd tmp_up(n,n), tmp_dn(n,n);
+	tmp_up.fill(0.); tmp_dn.fill(0.);
+	int mat_count;
+	for (int kl = 0; kl < numbas; kl++){
+		mat_count = 9*kl;
+		tmp_up(mat_count, mat_count) = csp5;//s
+		tmp_up(1+mat_count, 1+mat_count) = csp5;//p
+		tmp_up(2+mat_count, 2+mat_count) = csp5;//p
+		tmp_up(3+mat_count, 3+mat_count) = csp5;//p
+		tmp_up(4+mat_count, 4+mat_count) = -cd5;//dt
+		tmp_up(5+mat_count, 5+mat_count) = -cd5;//dt
+		tmp_up(6+mat_count, 6+mat_count) = -cd5;//dt
+		tmp_up(7+mat_count, 7+mat_count) = -cd5;//de
+		tmp_up(8+mat_count, 8+mat_count) = -cd5;//de
+
+		tmp_dn(mat_count, mat_count) = csp5;//s
+		tmp_dn(1+mat_count, 1+mat_count) = csp5;//p
+		tmp_dn(2+mat_count, 2+mat_count) = csp5;//p
+		tmp_dn(3+mat_count, 3+mat_count) = csp5;//p
+		tmp_dn(4+mat_count, 4+mat_count) = cd5;//dt
+		tmp_dn(5+mat_count, 5+mat_count) = cd5;//dt
+		tmp_dn(6+mat_count, 6+mat_count) = cd5;//dt
+		tmp_dn(7+mat_count, 7+mat_count) = cd5;//de
+		tmp_dn(8+mat_count, 8+mat_count) = cd5;//de
+	}
+ 	GL_up = (OM - (FM_up + tmp_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
+ 	GL_dn = (OM - (FM_dn + tmp_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
  	for (int it=0; it < lim2 - 1; ++it){ 
  		GL_up = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up*FM_up_T).inverse(); 
  		GL_dn = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn*FM_dn_T).inverse(); 
@@ -549,8 +579,36 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	} 
  //lim2 is thickness of layer 3 
  //build thickness of layer 3 to lim2 layers 
- 	GL_up = (OM - (FM_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
- 	GL_dn = (OM - (FM_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
+	//TODO very important -- this will need to be altered or even removed for a different system
+	int csp5 = -0.310269;//Andrey's technique, modify interface pots of Fe against MgO to get correct magnetic moment
+	int cd5 = 4.9467782e-3;
+	MatrixXcd tmp_up(n,n), tmp_dn(n,n);
+	tmp_up.fill(0.); tmp_dn.fill(0.);
+	int mat_count;
+	for (int kl = 0; kl < numbas; kl++){
+		mat_count = 9*kl;
+		tmp_up(mat_count, mat_count) = csp5;//s
+		tmp_up(1+mat_count, 1+mat_count) = csp5;//p
+		tmp_up(2+mat_count, 2+mat_count) = csp5;//p
+		tmp_up(3+mat_count, 3+mat_count) = csp5;//p
+		tmp_up(4+mat_count, 4+mat_count) = -cd5;//dt
+		tmp_up(5+mat_count, 5+mat_count) = -cd5;//dt
+		tmp_up(6+mat_count, 6+mat_count) = -cd5;//dt
+		tmp_up(7+mat_count, 7+mat_count) = -cd5;//de
+		tmp_up(8+mat_count, 8+mat_count) = -cd5;//de
+
+		tmp_dn(mat_count, mat_count) = csp5;//s
+		tmp_dn(1+mat_count, 1+mat_count) = csp5;//p
+		tmp_dn(2+mat_count, 2+mat_count) = csp5;//p
+		tmp_dn(3+mat_count, 3+mat_count) = csp5;//p
+		tmp_dn(4+mat_count, 4+mat_count) = cd5;//dt
+		tmp_dn(5+mat_count, 5+mat_count) = cd5;//dt
+		tmp_dn(6+mat_count, 6+mat_count) = cd5;//dt
+		tmp_dn(7+mat_count, 7+mat_count) = cd5;//de
+		tmp_dn(8+mat_count, 8+mat_count) = cd5;//de
+	}
+ 	GL_up = (OM - (FM_up + tmp_up - V*I) -ins_FM_up_T.adjoint()*GL_up*ins_FM_up_T).inverse(); 
+ 	GL_dn = (OM - (FM_dn + tmp_dn - V*I) -ins_FM_dn_T.adjoint()*GL_dn*ins_FM_dn_T).inverse(); 
  	for (int it=0; it < lim2 - 1; ++it){ 
  		GL_up = (OM - (FM_up - V*I) -FM_up_T_dagg*GL_up*FM_up_T).inverse(); 
  		GL_dn = (OM - (FM_dn - V*I) -FM_dn_T_dagg*GL_dn*FM_dn_T).inverse(); 
@@ -1225,7 +1283,17 @@ int main()
 							order = 3.5;
 						else 
 							order = 5.;
-						tmp = gmean(hop_up[tmpat1][l][kk], hop_up[tmpat2][l][kk], dist[tmpat1][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						//if Au/Fe and MgO then just scale Fe/Au to the differing distances e.g. no gmean to MgO
+						if ((tmpat1 == "Au") && ((tmpat2 == "Mg") || (tmpat2 == "O")))//atom names are explicit here as we only need to do this for this system
+							tmp = gmean(hop_up[tmpat1][l][kk], hop_up[tmpat1][l][kk], dist[tmpat1][l], dist[tmpat1][l], dist[tmp_atom][m], order);
+						else if ((tmpat2 == "Au") && ((tmpat1 == "Mg") || (tmpat1 == "O")))//atom names are explicit here as we only need to do this for this system
+							tmp = gmean(hop_up[tmpat2][l][kk], hop_up[tmpat2][l][kk], dist[tmpat2][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						else if ((tmpat1 == "Fe") && ((tmpat2 == "Mg") || (tmpat2 == "O")))
+							tmp = gmean(hop_up[tmpat1][l][kk], hop_up[tmpat1][l][kk], dist[tmpat1][l], dist[tmpat1][l], dist[tmp_atom][m], order);
+						else if ((tmpat2 == "Fe") && ((tmpat1 == "Mg") || (tmpat1 == "O")))
+							tmp = gmean(hop_up[tmpat2][l][kk], hop_up[tmpat2][l][kk], dist[tmpat2][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						else
+							tmp = gmean(hop_up[tmpat1][l][kk], hop_up[tmpat2][l][kk], dist[tmpat1][l], dist[tmpat2][l], dist[tmp_atom][m], order);
 						temporary_vector.emplace_back(tmp);
 					}
 					hop_up[tmp_atom].emplace_back(temporary_vector);
@@ -1237,7 +1305,16 @@ int main()
 							order = 3.5;
 						else 
 							order = 5.;
-						tmp = gmean(hop_dn[tmpat1][l][kk], hop_dn[tmpat2][l][kk], dist[tmpat1][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						if ((tmpat1 == "Au") && ((tmpat2 == "Mg") || (tmpat2 == "O")))//atom names are explicit here as we only need to do this for this system
+							tmp = gmean(hop_dn[tmpat1][l][kk], hop_dn[tmpat1][l][kk], dist[tmpat1][l], dist[tmpat1][l], dist[tmp_atom][m], order);
+						else if ((tmpat2 == "Au") && ((tmpat1 == "Mg") || (tmpat1 == "O")))//atom names are explicit here as we only need to do this for this system
+							tmp = gmean(hop_dn[tmpat2][l][kk], hop_dn[tmpat2][l][kk], dist[tmpat2][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						else if ((tmpat1 == "Fe") && ((tmpat2 == "Mg") || (tmpat2 == "O")))
+							tmp = gmean(hop_dn[tmpat1][l][kk], hop_dn[tmpat1][l][kk], dist[tmpat1][l], dist[tmpat1][l], dist[tmp_atom][m], order);
+						else if ((tmpat2 == "Fe") && ((tmpat1 == "Mg") || (tmpat1 == "O")))
+							tmp = gmean(hop_dn[tmpat2][l][kk], hop_dn[tmpat2][l][kk], dist[tmpat2][l], dist[tmpat2][l], dist[tmp_atom][m], order);
+						else
+							tmp = gmean(hop_dn[tmpat1][l][kk], hop_dn[tmpat2][l][kk], dist[tmpat1][l], dist[tmpat2][l], dist[tmp_atom][m], order);
 						temporary_vector.emplace_back(tmp);
 					}
 					hop_dn[tmp_atom].emplace_back(temporary_vector);
