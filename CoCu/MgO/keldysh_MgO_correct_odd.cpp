@@ -193,8 +193,6 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	MatrixXcd tmp1, tmp2; 
  	vector<double> result; 
  	result.reserve(N); 
- 	//TODO at the moment, this is only accurate from N = 4... 
- 	//because of gmean behaviour. See questions.txt 
  //adlayer layer 2 from layer 1 to spacer thickness, N 
  	for (int it=0; it < N/2; ++it){ 
  		GL.topLeftCorner(n,n) = GL_up; 
@@ -294,8 +292,6 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	GR_dagg_T_dagg_even = GR_dagg_even*Tdagg; 
  	GR_dagg_T_dagg_odd = GR_dagg_odd*Tdagg; 
  	MatrixXcd tmp1, tmp2; 
- 	//TODO at the moment, this is only accurate from N = 4... 
- 	//because of gmean behaviour. See questions.txt 
  //adlayer layer 2 from layer 1 to spacer thickness, N 
  	int kl; 
  	for (kl = N - 1; kl >= 0; kl--){ 
@@ -1087,7 +1083,7 @@ int main()
 	//Distance information for n.n and n.n.n
 	dist_tmp.emplace_back(M_SQRT2/2.);
 	dist_tmp.emplace_back(1.);
-	dist_tmp.emplace_back(M_SQRT2);//the hoppings are zero here
+	dist_tmp.emplace_back(1.2247);//the hoppings are zero here
 	dist[tmp_atom] = dist_tmp;
 	dist_tmp.clear();
 

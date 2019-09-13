@@ -1020,7 +1020,7 @@ int main()
 	//Distance information for n.n and n.n.n
 	dist_tmp.emplace_back(M_SQRT2/2.);
 	dist_tmp.emplace_back(1.);
-	dist_tmp.emplace_back(M_SQRT2);//the hoppings are zero here
+	dist_tmp.emplace_back(1.2247);//the hoppings are zero here
 	dist[tmp_atom] = dist_tmp;
 	dist_tmp.clear();
 
