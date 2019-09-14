@@ -63,6 +63,33 @@ typedef struct
 	}
 variables;
 
+void recip(const Vector3d &a1, const Vector3d &a2, Vector3d &b1, Vector3d &b2){
+	//construct the third (normalised) lattice vector
+      Vector3d d;
+      d = a1.cross(a2);
+      d.normalize();
+//     -----------------------------------------------------------------
+//     now determine the reciprocal lattice vectors
+      Vector3d an1, an2;
+      an1=a1;
+      an2=a2;
+      b1 = an2.cross(d);
+      b2 = an1.cross(d);
+      double a1b1, a2b2;
+      a1b1 = a1.dot(b1);
+      a2b2 = a2.dot(b2);
+      b1 = 2*M_PI*b1/a1b1;
+      b2 = 2*M_PI*b2/a2b2;
+//     now determine whether b2 or -b2 has the smallest angle with b1
+      double b1b1, b2b2, b1b2;
+      b1b1 = b1.dot(b1);
+      b2b2 = b2.dot(b2);
+      b1b2 = b1.dot(b2);
+      if (b1b2 < 0)
+        b2=-b2;
+      return;
+}
+
 //calculates g at the interfaces
 MatrixXcd gs(const MatrixXcd &OM, const MatrixXcd &T, const int numbas)
 {
@@ -1043,7 +1070,7 @@ int main()
 	//thickness of intermediate layers (except spacer)
 	vector<int> thick;
 	//set number of insulator principle layers
-	thick.emplace_back(2);//remember in halite structures the two basis atoms are on the same plane
+	thick.emplace_back(2);//4 atomic layers here
 	//set number of LH FM bilayers
 	thick.emplace_back(10);
 	if (thick.size() + 3 - numlay != 0){
@@ -1784,6 +1811,9 @@ int main()
 	else
 		Mydata += "-Keldysh_V.txt";
 	answer = switching(&send);
+	Vector3d b1, b2;
+	recip(lat_vec1, lat_vec2, b1, b2);
+	Vector3d xk;
 
 	/* vector<double> result; */
 	/* vector<double> integrate; */
@@ -1791,31 +1821,33 @@ int main()
 	/* integrate.reserve(N); */
 	/* for (int i = 0; i < N; i++) */
 	/* 	result[i] = 0.; */
-	/* /1* int n = 350;//set the number of k-points along x axis *1/ */
-	/* int n = 2;//set the number of k-points along x axis */
-	/* int counter2 = 0; */
+	/* int n = 350;//set the number of k-points along x axis */
+	/* /1* int n = 2;//set the number of k-points along x axis *1/ */
+	/* int counter3 = 0; */
 	/* double factor = 2./(n*n); */
 	/* int sumk = n*(n + 1)/2; */
 	/* int p, q; */
 	/* int product1; */
 	/* int myid, numprocs; */
 	/* time_t timer; */
-	/* int kk, l, i; */
+	/* int kk, ll, i; */
 	/* int start_time = time(&timer); */
 	/* MPI_Init(NULL,NULL); */
 	/* MPI_Comm_size(MPI_COMM_WORLD, &numprocs); */
 	/* MPI_Comm_rank(MPI_COMM_WORLD, &myid); */
 	/* for (kk = 2*myid + 1; kk<2*sumk; kk+=2*numprocs){ */
-	/* 	for (l = 0; l < n; l++){ */
-	/* 		product1 = (2*n - l)*(l + 1); */
+	/* 	for (ll = 0; ll < n; ll++){ */
+	/* 		product1 = (2*n - ll)*(ll + 1); */
 	/* 		if ( kk < product1){ */
-	/* 			p = 2*(kk/(2*n - l)) + 1; */
-	/* 			q = (l*(l + 1) + kk)%(2*n); */
+	/* 			p = 2*(kk/(2*n - ll)) + 1; */
+	/* 			q = (ll*(ll + 1) + kk)%(2*n); */
 	/* 			break; */
 	/* 		} */
 	/* 	} */
-	/* 	send.x = M_PI*(p + q)/(2*n);//this translates the grid for fcc 1st BZ */
-	/* 	send.z = M_PI*(p - q)/(2*n);//this translates the grid for fcc 1st BZ */
+	/* 	xk = 0.5*p*b1 + 0.5*q*b2; */
+	/* 	send.x = xk(0)/(2*n); */
+	/* 	send.z = xk(2)/(2*n); */
+	/* 	cout<<send.x<<" "<<send.z<<endl; */
 	/* 	integrate = switching(&send); */
 	/* 	for (i = 0; i < N; i++){ */
 	/* 		if ((p==1) && (q==1)) */
@@ -1825,10 +1857,10 @@ int main()
 	/* 		else */
 	/* 			result[i] += factor*integrate[i]; */
 	/* 	} */
-	/* 	counter2++; */
+	/* 	counter3++; */
 	/* } */
 	/* cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl; */
-	/* cout<<"process "<<myid<<" performed "<<counter2<<" computations"<<endl; */
+	/* cout<<"process "<<myid<<" performed "<<counter3<<" computations"<<endl; */
 	/* for (i = 0; i < N; i++) */
 	/* 	MPI_Reduce(&result[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD); */
 	/* if (myid == 0){ */
