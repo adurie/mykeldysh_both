@@ -42,7 +42,7 @@ typedef struct
 		double kT;
 		Vector3d *b1;
 		Vector3d *b2;
-		unordered_map<double, unordered_map<double, vector<double>>> *all_the_data;
+		unordered_map<double, unordered_map<double, vector<double>>> all_the_data;
 		vector<bool> *isMag;
 		vector<vector<string>> *attype;
 		vector<vector<string>> *oddattype;
@@ -66,12 +66,12 @@ typedef struct
 	}
 variables;
 
-static double NAG_CALL phi1(double y, Nag_Comm *comm)
+double phi1(double y, Nag_Comm *comm)
 {
 	return 0.0;
 }
 
-static double NAG_CALL phi2(double y, Nag_Comm *comm)
+double phi2(double y, Nag_Comm *comm)
 {
 	return y;
 }
@@ -751,8 +751,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	 //nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); 
- 	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
- 	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Absolute Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Relative Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
 
 	 // Determine required array dimensions for 
 	 // nag_quad_1d_gen_vec_multi_rcomm (d01rac) using 
@@ -1049,61 +1049,40 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	return total;
 }
 
-static double NAG_CALL fa(double x, double y, Nag_Comm *comm)
+double fa(double x, double y, Nag_Comm *comm)
 {
-	cout<<"Loop beginning"<<endl;
 	variables * send = (variables *) comm->p;
 	int i = send->it;
-	cout<<i<<endl;
 	Vector3d b1 = *send->b1;
 	Vector3d b2 = *send->b2;
 	double result;
 	Vector3d xk;
-	cout<<i<<endl;
-	unordered_map<double, unordered_map<double, vector<double>>> all_the_data = *send->all_the_data;
-	cout<<i<<endl;
-	if (!all_the_data.count(x)){
+
+	if (!send->all_the_data.count(x)){
 		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		cout<<"in 1st if"<<endl;
-		cout<<i<<endl;
 		integrate = switching(send);
-		cout<<i<<endl;
-		all_the_data[x][y] = integrate;
-		cout<<i<<endl;
+		send->all_the_data[x][y] = integrate;
+		cout<<send->all_the_data[x][y].size()<<endl;
 		result = integrate[i];
-		cout<<i<<endl;
-		send->all_the_data = &all_the_data;
-		cout<<i<<endl;
+		cout<<result<<endl;
 	}
-	else if (!all_the_data[x].count(y)){
+	else if (!send->all_the_data[x].count(y)){
 		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		cout<<"in 2nd if"<<endl;
-		cout<<i<<endl;
 		integrate = switching(send);
-		cout<<i<<endl;
-		all_the_data[x][y] = integrate;
-		cout<<i<<endl;
+		send->all_the_data[x][y] = integrate;
 		result = integrate[i];
-		cout<<i<<endl;
-		send->all_the_data = &all_the_data;
-		cout<<i<<endl;
 	}
 	else {
-		cout<<"in 3rd if"<<endl;
-		cout<<i<<endl;
-		result = all_the_data[x][y][i];
-		cout<<i<<endl;
+		cout<<send->all_the_data[x][y].size()<<endl;
+		result = send->all_the_data[x][y][i];
 	}
-	cout<<"out"<<endl;
-	cout<<i<<endl;
 	comm->p = send;
-	cout<<i<<endl;
 	return result;
 }
 
@@ -1862,7 +1841,7 @@ int main()
 	send.b2 = &b2;
 
 	unordered_map<double, unordered_map<double, vector<double>>> all_the_data;
-	send.all_the_data = &all_the_data;
+	send.all_the_data = all_the_data;
 
 	Integer exit_status = 0;
 	Integer npts;
@@ -1874,8 +1853,6 @@ int main()
 	NagError fail;
 
 	INIT_FAIL(fail);
-
-	/* For communication with user-supplied functions: */
 
 	for (int it = 0; it < N; it++){
 		send.it = it;
