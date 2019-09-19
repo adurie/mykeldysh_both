@@ -751,8 +751,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	 //nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); 
- 	nag_quad_opt_set("Absolute Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
- 	nag_quad_opt_set("Relative Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
 
 	 // Determine required array dimensions for 
 	 // nag_quad_1d_gen_vec_multi_rcomm (d01rac) using 
@@ -1059,24 +1059,20 @@ double fa(double x, double y, Nag_Comm *comm)
 	Vector3d xk;
 
 	if (!send->all_the_data.count(x)){
-		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		integrate = switching(send);
-		send->all_the_data[x][y] = integrate;
+		send->all_the_data[x][y] = switching(send);
 		cout<<send->all_the_data[x][y].size()<<endl;
-		result = integrate[i];
-		cout<<result<<endl;
+		result = send->all_the_data[x][y][i];
 	}
 	else if (!send->all_the_data[x].count(y)){
-		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		integrate = switching(send);
-		send->all_the_data[x][y] = integrate;
-		result = integrate[i];
+		send->all_the_data[x][y] = switching(send);
+		cout<<send->all_the_data[x][y].size()<<endl;
+		result = send->all_the_data[x][y][i];
 	}
 	else {
 		cout<<send->all_the_data[x][y].size()<<endl;
