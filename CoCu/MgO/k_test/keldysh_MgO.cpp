@@ -515,8 +515,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	result.reserve(N); 
  	integrate.reserve(N); 
  	for (int i = 0; i < N; i++){ 
- 		result[i] = 0.; 
- 		integrate[i] = 0.; 
+ 		result.emplace_back(0.); 
+ 		integrate.emplace_back(0.); 
  	} 
  	double theta; 
 
@@ -751,8 +751,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	 //nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); 
- 	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
- 	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Absolute Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Relative Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
 
 	 // Determine required array dimensions for 
 	 // nag_quad_1d_gen_vec_multi_rcomm (d01rac) using 
@@ -1013,12 +1013,12 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 		result1 = int_energy(send);
 	else {
 		for (int l = 0; l < N; l++)
-			result1[l] = 0.;
+			result1.emplace_back(0.);
 	}
 	integrate.reserve(N);
 	result2.reserve(N);
 	for (int l = 0; l < N; l++)
-		result2[l] = 0.;
+		result2.emplace_back(0.);
 
 	dcomp i;
 	i = -1.;
@@ -1045,7 +1045,7 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 	vector<double> total;
 	total.reserve(N);
 	for (int l = 0; l < N; l++)
-		total[l] = result1[l] + result2[l];
+		total.emplace_back(result1[l] + result2[l]);
 	return total;
 }
 
@@ -1062,20 +1062,17 @@ double fa(double x, double y, Nag_Comm *comm)
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		send->all_the_data[x][y] = switching(send);
-		cout<<send->all_the_data[x][y].size()<<endl;
+		send->all_the_data[x].emplace(y, switching(send));
 		result = send->all_the_data[x][y][i];
 	}
 	else if (!send->all_the_data[x].count(y)){
 		xk = 0.5*x*b1 + 0.5*y*b2;
 		send->x = xk(0);
 		send->z = xk(2);
-		send->all_the_data[x][y] = switching(send);
-		cout<<send->all_the_data[x][y].size()<<endl;
+		send->all_the_data[x].emplace(y, switching(send));
 		result = send->all_the_data[x][y][i];
 	}
 	else {
-		cout<<send->all_the_data[x][y].size()<<endl;
 		result = send->all_the_data[x][y][i];
 	}
 	comm->p = send;
