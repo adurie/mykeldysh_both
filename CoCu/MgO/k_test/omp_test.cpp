@@ -8,6 +8,7 @@
 #include <Eigen/src/Core/util/MKL_support.h>
 #include <nag.h>
 #include <nagd01.h>
+#include <nagx06.h>
 #include <nag_stdlib.h>
 #include <vector>
 #include <unordered_map>
@@ -234,21 +235,19 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  	vector<double> result; 
  	result.reserve(N); 
  //adlayer layer 2 from layer 1 to spacer thickness, N 
- 	for (int it=0; it < (N + 1)/2; ++it){ 
+ 	for (int it=0; it < N/2; ++it){ 
  		GL.topLeftCorner(n,n) = GL_up; 
  		GL.bottomRightCorner(n,n) = GL_dn; 
  		A_even = (Ibig-GR_T_dagg_even*GL*T).inverse(); 
  		B_even = (Ibig-GR_dagg_T_dagg_even*GL.adjoint()*T).inverse(); 
+ 		A_odd = (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
+ 		B_odd = (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
  		TOT_even = (B_even.adjoint()-A_even)*Pauli; 
+ 		TOT_odd = (B_odd.adjoint()-A_odd)*Pauli; 
  		spincurrent_even = .25*imag(TOT_even.trace()); 
+ 		spincurrent_odd = .25*imag(TOT_odd.trace()); 
  		result.emplace_back(spincurrent_even); 
-		if (!((N%2==1)&&(it==(N+1)/2 - 1))){
- 			A_odd = (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
-	 		B_odd = (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
- 			TOT_odd = (B_odd.adjoint()-A_odd)*Pauli; 
- 			spincurrent_odd = .25*imag(TOT_odd.trace()); 
- 			result.emplace_back(spincurrent_odd); 
-		}
+ 		result.emplace_back(spincurrent_odd); 
  		GL_up = (OM - (NM - V*I) -NM_T_dagg*GL_up*NM_T).inverse(); 
  		GL_dn = (OM - (NM - V*I) -NM_T_dagg*GL_dn*NM_T).inverse(); 
  	} 
@@ -359,18 +358,16 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
  		} 
 
  		if (needi[2*it + 1] == 1){ 
-			if (!((N%2==1)&&(it==(N+1)/2 - 1))){
- 				GL.topLeftCorner(n,n) = GL_up; 
- 				GL.bottomRightCorner(n,n) = GL_dn; 
-	 			A= (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
- 				B= (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
- 				tmp1 = B*GR_dagg_T_dagg_odd; 
- 				tmp2 = A*tmp1; 
- 				tmp1 = T*tmp2; 
- 				tmp2 = GL*tmp1; 
- 				TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
- 				spincurrent[2*it + 1] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); 
-			}
+ 			GL.topLeftCorner(n,n) = GL_up; 
+ 			GL.bottomRightCorner(n,n) = GL_dn; 
+ 			A= (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
+ 			B= (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
+ 			tmp1 = B*GR_dagg_T_dagg_odd; 
+ 			tmp2 = A*tmp1; 
+ 			tmp1 = T*tmp2; 
+ 			tmp2 = GL*tmp1; 
+ 			TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
+ 			spincurrent[2*it + 1] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); 
  		} 
 
  		if (it != kl/2 - 1){//saves wasting unused results 
@@ -755,8 +752,8 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 	 //nag_quad_opt_set("Quadrature Rule = gk41", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk51", iopts, liopts, opts, lopts, &fail); 
 	 //nag_quad_opt_set("Quadrature Rule = gk61", iopts, liopts, opts, lopts, &fail); 
- 	nag_quad_opt_set("Absolute Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
- 	nag_quad_opt_set("Relative Tolerance = 1.0e-6", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Absolute Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
+ 	nag_quad_opt_set("Relative Tolerance = 1.0e-1", iopts, liopts, opts, lopts, &fail);
 
 	 // Determine required array dimensions for 
 	 // nag_quad_1d_gen_vec_multi_rcomm (d01rac) using 
@@ -1055,32 +1052,37 @@ vector<double> switching(variables * send) {//TODO we need to check that spin up
 
 double fa(double x, double y, Nag_Comm *comm)
 {
-	variables * send = (variables *) comm->p;
-	int i = send->it;
-	Vector3d b1 = *send->b1;
-	Vector3d b2 = *send->b2;
+	variables *send2 = (variables *) comm->p;
+	variables send = *send2;
+	int i = send.it;
+	Vector3d b1 = *send.b1;
+	Vector3d b2 = *send.b2;
 	double result;
 	Vector3d xk;
-	cout<<x<<" "<<y<<endl;
+	cout<<x06afc()<<endl;
 
-	if (!send->all_the_data.count(x)){
+	if (!send2->all_the_data.count(x)){
+		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
-		send->x = xk(0);
-		send->z = xk(2);
-		send->all_the_data[x].emplace(y, switching(send));
-		result = send->all_the_data[x][y][i];
+		send.x = xk(0);
+		send.z = xk(2);
+		integrate = switching(&send);
+		send2->all_the_data[x].emplace(y, integrate);
+		result = send2->all_the_data[x][y][i];
 	}
-	else if (!send->all_the_data[x].count(y)){
+	else if (!send2->all_the_data[x].count(y)){
+		vector<double> integrate;
 		xk = 0.5*x*b1 + 0.5*y*b2;
-		send->x = xk(0);
-		send->z = xk(2);
-		send->all_the_data[x].emplace(y, switching(send));
-		result = send->all_the_data[x][y][i];
+		send.x = xk(0);
+		send.z = xk(2);
+		integrate = switching(&send);
+		send2->all_the_data[x].emplace(y, integrate);
+		result = send2->all_the_data[x][y][i];
 	}
 	else {
-		result = send->all_the_data[x][y][i];
+		result = send2->all_the_data[x][y][i];
 	}
-	comm->p = send;
+	comm->p = send2;
 	return result;
 }
 
@@ -1092,7 +1094,7 @@ int main()
 	// number of spacer layers
 	const int N = 10;
 	// set bias
-	const double V = 0.00;
+	const double V = 0.05;
 	const int numlay = 5;//number of slabs i.e. Au|MgO|Fe|Au|Fe
 	//figure out a way to determine this from header file
 	vector<bool> isMag;//is each layer magnetic?
@@ -1810,7 +1812,7 @@ int main()
 	send.odd_atom_dn = &odd_atom_dn;
 	send.V = V;
 	send.thick = &thick;
-	/* send.N = N; */
+	send.N = N;
 
 	vector<double> answer;
 	answer.reserve(N);
@@ -1827,7 +1829,7 @@ int main()
 	ofstream Myfile;	
 
 	if (abs(V) < 1e-4)
-		Mydata += "-revKeldysh_V0.txt";
+		Mydata += "-Keldysh_V0.txt";
 	else
 		Mydata += "-Keldysh_V.txt";
 	/* answer = switching(&send); */
@@ -1846,26 +1848,20 @@ int main()
 	double absacc, ans, ya, yb;
 	ya = 0;
 	yb = 1;
-	absacc = 1e-6;
+	absacc = 1e-1;
 	Nag_Comm comm;
 	NagError fail;
 
 	INIT_FAIL(fail);
 
-	//TODO may want to test this change to the loop...
-	//it is changed to start integration at the thickest layer, 
-	//then store them to map for the thinner layers, where if any
-	//further calls to full energy integration are required, then
-	//they no longer adlayer to full thickness
-	for (int it = N - 1; it > -1; it--){
-	/* for (int it = 0; it < N; it++){ */
-		/* if (it % 2 == 0) */
-		/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
-		/* else */
-			send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
+	x06agc(0);
+	x06aac(x06acc(),&fail);
+	cout<<x06acc()<<endl;
+	cout<<omp_get_max_threads()<<endl;
+	for (int it = 0; it < N; it++){
 		send.it = it;
 		comm.p = &send;
-		cout<<it<<endl;
+		x06aac(x06acc(),&fail);
 		nag_quad_2d_fin(ya, yb, phi1, phi2, fa, absacc, &ans, &npts, &comm, &fail);
 		if (fail.code != NE_NOERROR) {
 			cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;

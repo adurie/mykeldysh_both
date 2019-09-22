@@ -40,6 +40,8 @@ typedef struct
 		double z;
 		double V;
 		double kT;
+		double xa;
+		double xb;
 		Vector3d *b1;
 		Vector3d *b2;
 		unordered_map<double, unordered_map<double, vector<double>>> all_the_data;
@@ -68,12 +70,19 @@ variables;
 
 double phi1(double y, Nag_Comm *comm)
 {
-	return 0.0;
+	variables * send = (variables *) comm->p;
+	return send->xa;
 }
 
-double phi2(double y, Nag_Comm *comm)
+double phi2a(double y, Nag_Comm *comm)
 {
 	return y;
+}
+
+double phi2b(double y, Nag_Comm *comm)
+{
+	variables * send = (variables *) comm->p;
+	return send->xb;
 }
 
 void recip(const Vector3d &a1, const Vector3d &a2, Vector3d &b1, Vector3d &b2){
@@ -362,13 +371,13 @@ M9 InPlaneH(const vec3 &pos, const Vector3d &basis, const vM &U, const double x,
 			if (!((N%2==1)&&(it==(N+1)/2 - 1))){
  				GL.topLeftCorner(n,n) = GL_up; 
  				GL.bottomRightCorner(n,n) = GL_dn; 
-	 			A= (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
+ 				A= (Ibig-GR_T_dagg_odd*GL*T).inverse(); 
  				B= (Ibig-GR_dagg_T_dagg_odd*GL.adjoint()*T).inverse(); 
  				tmp1 = B*GR_dagg_T_dagg_odd; 
  				tmp2 = A*tmp1; 
  				tmp1 = T*tmp2; 
  				tmp2 = GL*tmp1; 
- 				TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
+	 			TOT = (tmp2-A*B+0.5*(A+B))*Pauli; 
  				spincurrent[2*it + 1] = (1./(4.*M_PI))*real(TOT.trace()*(fermi(E,Ef,kT)-fermi(E,Ef-V,kT))); 
 			}
  		} 
@@ -1096,11 +1105,11 @@ int main()
 	const int numlay = 5;//number of slabs i.e. Au|MgO|Fe|Au|Fe
 	//figure out a way to determine this from header file
 	vector<bool> isMag;//is each layer magnetic?
-	isMag.emplace_back(false);
-	isMag.emplace_back(false);
-	isMag.emplace_back(true);
-	isMag.emplace_back(false);
-	isMag.emplace_back(true);
+	isMag.push_back(false);
+	isMag.push_back(false);
+	isMag.push_back(true);
+	isMag.push_back(false);
+	isMag.push_back(true);
 	//thickness of intermediate layers (except spacer)
 	vector<int> thick;
 	//set number of insulator principle layers
@@ -1810,6 +1819,7 @@ int main()
 	send.odd_atom_dn = &odd_atom_dn;
 	send.V = V;
 	send.thick = &thick;
+	//commented out for my brilliant idea
 	/* send.N = N; */
 
 	vector<double> answer;
@@ -1827,7 +1837,7 @@ int main()
 	ofstream Myfile;	
 
 	if (abs(V) < 1e-4)
-		Mydata += "-revKeldysh_V0.txt";
+		Mydata += "-Keldysh_V0.txt";
 	else
 		Mydata += "-Keldysh_V.txt";
 	/* answer = switching(&send); */
@@ -1843,37 +1853,87 @@ int main()
 
 	Integer exit_status = 0;
 	Integer npts;
-	double absacc, ans, ya, yb;
-	ya = 0;
-	yb = 1;
+	double absacc, ans, ya, yb, xa, xb;
 	absacc = 1e-6;
 	Nag_Comm comm;
 	NagError fail;
-
 	INIT_FAIL(fail);
+	vector<double> integrate;
+	integrate.reserve(N);
+	for (int kk = 0; kk < N; kk++)
+		integrate.emplace_back(0.);
 
-	//TODO may want to test this change to the loop...
-	//it is changed to start integration at the thickest layer, 
-	//then store them to map for the thinner layers, where if any
-	//further calls to full energy integration are required, then
-	//they no longer adlayer to full thickness
-	for (int it = N - 1; it > -1; it--){
-	/* for (int it = 0; it < N; it++){ */
-		/* if (it % 2 == 0) */
-		/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
-		/* else */
-			send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
-		send.it = it;
-		comm.p = &send;
-		cout<<it<<endl;
-		nag_quad_2d_fin(ya, yb, phi1, phi2, fa, absacc, &ans, &npts, &comm, &fail);
-		if (fail.code != NE_NOERROR) {
-			cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
-				/* exit(EXIT_FAILURE); */
+	int myid, numprocs;
+	time_t timer;
+	int start_time = time(&timer);
+	MPI_Init(NULL,NULL);
+	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+	int bigN = -0.5 + 0.5*sqrt(1 + 8*numprocs);
+	int proc_count = 0;
+
+	for (int xi = 0; xi < bigN; xi++){
+		for (int yi = 0; yi < xi + 1; yi++){
+			if (proc_count == myid){
+				ya = yi/(1.*n);
+				yb = (yi + 1)/(1.*n);
+				xa = xi/(1.*n);
+				send.xa = xa;
+				if (xi == yi){
+					/* for (int it = 0; it < N; it++){ */
+					for (int it = N - 1; it > -1; it--){
+						/* if (it % 2 == 0) */
+						/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
+						/* else */
+							send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
+						send.it = it;
+						comm.p = &send;
+						nag_quad_2d_fin(ya, yb, phi1, phi2a, fa, absacc, &ans, &npts, &comm, &fail);
+						if (fail.code != NE_NOERROR) {
+							cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
+								/* exit(EXIT_FAILURE); */
+						}
+						cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl;
+						integrate[it] += ans;
+					}
+				}
+				else {
+					xb = (xi + 1)/(1.*n);
+					for (int it = N - 1; it > -1; it--){
+					/* for (int it = 0; it < N; it++){ */
+						/* if (it % 2 == 0) */
+						/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
+						/* else */
+							send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
+						send.xb = xb;
+						send.it = it;
+						comm.p = &send;
+						nag_quad_2d_fin(ya, yb, phi1, phi2b, fa, absacc, &ans, &npts, &comm, &fail);
+						if (fail.code != NE_NOERROR) {
+							cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
+								/* exit(EXIT_FAILURE); */
+						}
+						cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl;
+						integrate[it] += ans;
+					}
+				}
+
+			}
+			proc_count++;
 		}
-		cout<<"Number of function evaluations = "<<npts<<endl;
-		Myfile<<scientific<<it+4<<" "<<ans<<endl;
 	}
+	cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl;
+	for (i = 0; i < N; i++)
+		MPI_Reduce(&integrate[i], &answer[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	if (myid == 0){
+
+		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
+		Myfile.open( Mydata.c_str(),ios::trunc );
+		for (int i = 0; i < N; i++)
+			Myfile<<scientific<<i+4<<" "<<answer[i]<<endl;
+
+	}
+	MPI_Finalize();
 
 	return 0;
 }
