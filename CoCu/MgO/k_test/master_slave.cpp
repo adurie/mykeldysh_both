@@ -1070,7 +1070,7 @@ double fa(double x, double y, Nag_Comm *comm)
 	Vector3d b2 = *send->b2;
 	double result;
 	Vector3d xk;
-	cout<<x<<" "<<y<<endl;
+	/* cout<<x<<" "<<y<<endl; */
 
 	if (!send->all_the_data.count(x)){
 		xk = 0.5*x*b1 + 0.5*y*b2;
@@ -1093,6 +1093,66 @@ double fa(double x, double y, Nag_Comm *comm)
 	return result;
 }
 
+void slave(const vector<int> &vec_yi, const vector<int> &vec_xi, int DIETAG, int bigN, int N, variables * send, int myid){
+
+	Integer exit_status = 0;
+	Integer npts;
+	Nag_Comm comm;
+	NagError fail;
+	INIT_FAIL(fail);
+	double absacc, ans, ya, yb, xa, xb;
+	absacc = 1e-6;
+	int xi, yi;
+
+	MPI_Status status;
+	int work;
+	vector<double> answer;
+	for (int i = 0; i < N; i++)
+		answer.emplace_back(0.);
+	while (1){
+		MPI_Recv(&work, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		if (status.MPI_TAG == DIETAG)
+			return;
+		yi = vec_yi[work];
+		xi = vec_xi[work];
+		ya = yi/(1.*bigN);
+		yb = (yi + 1)/(1.*bigN);
+		xa = xi/(1.*bigN);
+		send->xa = xa;
+		if (xi == yi){
+			for (int it = N - 1; it > -1; it--){
+				send->N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
+				send->it = it;
+				comm.p = send;
+				nag_quad_2d_fin(ya, yb, phi1, phi2a, fa, absacc, &ans, &npts, &comm, &fail);
+				if (fail.code != NE_NOERROR) {
+					cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
+						/* exit(EXIT_FAILURE); */
+				}
+				/* cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl; */
+				answer[it] = ans;
+			}
+		}
+		else {
+			for (int it = N - 1; it > -1; it--){
+				send->N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
+				xb = (xi + 1)/(1.*bigN);
+				send->xb = xb;
+				send->it = it;
+				comm.p = send;
+				nag_quad_2d_fin(ya, yb, phi1, phi2b, fa, absacc, &ans, &npts, &comm, &fail);
+				if (fail.code != NE_NOERROR) {
+					cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
+						/* exit(EXIT_FAILURE); */
+				}
+				/* cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl; */
+				answer[it] = ans;
+			}
+		}
+		MPI_Send(&answer[0], N, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+	}
+}
+
 int main() 
 {
 	//EDITABLE INPUT DATA HERE TODO COULD LOOK AT QE/WANNIER LIKE INPUT FILE
@@ -1100,6 +1160,7 @@ int main()
 	const double Ef = 0.;//set Fermi level to zero throughout in header file
 	// number of spacer layers
 	const int N = 10;
+	const int numblocks = 100;//setting the number of partitions of the irreducible segment
 	// set bias
 	const double V = 0.00;
 	const int numlay = 5;//number of slabs i.e. Au|MgO|Fe|Au|Fe
@@ -1850,82 +1911,58 @@ int main()
 	unordered_map<double, unordered_map<double, vector<double>>> all_the_data;
 	send.all_the_data = all_the_data;
 
-	Integer exit_status = 0;
-	Integer npts;
-	double absacc, ans, ya, yb, xa, xb;
-	absacc = 1e-6;
-	Nag_Comm comm;
-	NagError fail;
-	INIT_FAIL(fail);
+	vector<int> vec_yi, vec_xi;
+	int bigN = -0.5 + 0.5*sqrt(1 + 8*numblocks);//this then takes the above and converts it to an n(n+1)/2 grid
+
+	for (int yi = 0; yi < bigN; yi++){//populate x and y into vectors to be expanded to start and end points in slave
+		for (int xi = 0; xi < yi + 1; xi++){//this will be of size 0.5*bigN*(bigN+1)
+			vec_yi.emplace_back(yi);
+			vec_xi.emplace_back(xi);
+		}
+	}
+
 	vector<double> integrate;
-	integrate.reserve(N);
 	for (int kk = 0; kk < N; kk++){
 		integrate.emplace_back(0.);
 		answer.emplace_back(0.);
 	}
-
-	int myid, numprocs;
-	int il;
 	time_t timer;
+	int myid, numprocs;
 	int start_time = time(&timer);
 	MPI_Init(NULL,NULL);
 	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-	int bigN = -0.5 + 0.5*sqrt(1 + 8*numprocs);
-	int proc_count = 0;
+	const int DIETAG = 2;
+	const int WORKTAG = 1;
 
-	for (int yi = 0; yi < bigN; yi++){
-		for (int xi = 0; xi < yi + 1; xi++){
-			if (proc_count == myid){
-				ya = yi/(1.*bigN);
-				yb = (yi + 1)/(1.*bigN);
-				xa = xi/(1.*bigN);
-				send.xa = xa;
-				if (xi == yi){
-					/* for (int it = 0; it < N; it++){ */
-					for (int it = N - 1; it > -1; it--){
-						/* if (it % 2 == 0) */
-						/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
-						/* else */
-							send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
-						send.it = it;
-						comm.p = &send;
-						nag_quad_2d_fin(ya, yb, phi1, phi2a, fa, absacc, &ans, &npts, &comm, &fail);
-						if (fail.code != NE_NOERROR) {
-							cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
-								/* exit(EXIT_FAILURE); */
-						}
-						cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl;
-						integrate[it] += ans;
-					}
-				}
-				else {
-					xb = (xi + 1)/(1.*bigN);
-					for (int it = N - 1; it > -1; it--){
-					/* for (int it = 0; it < N; it++){ */
-						/* if (it % 2 == 0) */
-						/* 	send.N = it + 2;//to reverse this, just swap commented loops, return send.N = N and comment out this */
-						/* else */
-							send.N = it + 1;//to reverse this, just swap commented loops, return send.N = N and comment out this
-						send.xb = xb;
-						send.it = it;
-						comm.p = &send;
-						nag_quad_2d_fin(ya, yb, phi1, phi2b, fa, absacc, &ans, &npts, &comm, &fail);
-						if (fail.code != NE_NOERROR) {
-							cout<<"Error from nag_quad_2d_fin (d01dac). "<<fail.message<<endl;
-								/* exit(EXIT_FAILURE); */
-						}
-						cout<<"process "<<myid<<" performed "<<npts<<" function evaluations for layer N = "<<it + 4<<endl;
-						integrate[it] += ans;
-					}
-				}
-			}
-			proc_count++;
+	if (myid == 0){//the master process
+		cout<<numblocks<<" partitions of the irreducible segment requested, "<<0.5*bigN*(bigN+1)<<" partitions provided."<<endl;
+		MPI_Status status;
+		int work = 0;//work provides the instruction to successfully unpack the partition dimensions for use by the workers
+		for (int rank = 1; rank < numprocs; ++rank){
+			MPI_Send(&work, 1, MPI_INT, rank, WORKTAG, MPI_COMM_WORLD);
+			work++;
 		}
+		while (work < vec_xi.size()){
+			MPI_Recv(&integrate[0], N, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Send(&work, 1, MPI_INT, status.MPI_SOURCE, WORKTAG, MPI_COMM_WORLD);
+			work++;
+			for (int jj = 0; jj < N; jj++)
+				answer[jj] += integrate[jj];
+		}
+		for (int rank = 1; rank < numprocs; ++rank){
+			MPI_Recv(&integrate[0], N, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			for (int jj = 0; jj < N; jj++)
+				answer[jj] += integrate[jj];
+		}
+		for (int rank = 1; rank < numprocs; ++rank)
+			MPI_Send(0, 0, MPI_INT, rank, DIETAG, MPI_COMM_WORLD);
 	}
-	cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl;
-	for (il = 0; il < N; il++)
-		MPI_Reduce(&integrate[il], &answer[il], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	else {//the slaves
+		slave(vec_yi, vec_xi, DIETAG, bigN, N, &send, myid);
+		cout<<"process "<<myid<<" took "<<time(&timer)-start_time<<"s"<<endl;
+	}
+
 	if (myid == 0){
 
 		//magic 4 below due to this being the number of Cu planes before spincurrent is calculated
